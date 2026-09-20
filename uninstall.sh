@@ -2,7 +2,8 @@
 # NotchDash 卸载：把动过的东西全部还原
 set -uo pipefail
 
-APP="$HOME/Applications/NotchDash.app"
+# 两个位置都清理，不确定当初装在哪
+APPS=("/Applications/NotchDash.app" "$HOME/Applications/NotchDash.app")
 PLIST="$HOME/Library/LaunchAgents/app.notchdash.NotchDash.plist"
 
 echo "① 停止运行"
@@ -30,7 +31,9 @@ else:
 PY
 
 echo "③ 删除应用"
-rm -rf "$APP"
+for a in "${APPS[@]}"; do
+  [ -d "$a" ] && rm -rf "$a" && echo "   已删除 $a"
+done
 
 echo
 echo "✅ 已卸载。以下内容保留着，需要的话自己删："

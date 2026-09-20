@@ -6,7 +6,16 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="NotchDash"
-DEST_DIR="$HOME/Applications"
+
+# 优先装到 /Applications：Launchpad、Spotlight 和 Finder 侧边栏的「应用程序」
+# 指的都是这里。~/Applications 虽然不需要权限，但侧边栏默认不显示，容易找不到。
+# 传 --user 可强制装到用户目录。
+if [ "${1:-}" = "--user" ] || [ ! -w /Applications ]; then
+  DEST_DIR="$HOME/Applications"
+  mkdir -p "$DEST_DIR"
+else
+  DEST_DIR="/Applications"
+fi
 DEST="$DEST_DIR/$APP_NAME.app"
 PLIST="$HOME/Library/LaunchAgents/app.notchdash.NotchDash.plist"
 
@@ -20,7 +29,7 @@ pkill -f "$DEST/Contents/MacOS/$APP_NAME" 2>/dev/null || true
 rm -rf "$DEST"
 cp -R "build/$APP_NAME.app" "$DEST"
 
-if [ "${1:-}" = "--autostart" ]; then
+if [ "${1:-}" = "--autostart" ] || [ "${2:-}" = "--autostart" ]; then
   echo "③ 注册开机自启"
   mkdir -p "$(dirname "$PLIST")"
   cat > "$PLIST" <<PLIST_EOF

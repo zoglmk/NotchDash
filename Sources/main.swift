@@ -30,6 +30,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 只允许跑一个实例。构建目录和 /Applications 下各有一份时，
+        // 很容易不小心开出两个，两块面板叠在一起还都在抢刘海的位置。
+        let mine = Bundle.main.bundleIdentifier
+        let others = NSWorkspace.shared.runningApplications.filter {
+            $0.bundleIdentifier == mine && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        }
+        if !others.isEmpty {
+            FileHandle.standardError.write("NotchDash 已在运行\n".data(using: .utf8)!)
+            NSApp.terminate(nil)
+            return
+        }
+
         guard rebuildWindow() else {
             FileHandle.standardError.write("找不到可用屏幕，退出\n".data(using: .utf8)!)
             NSApp.terminate(nil)
