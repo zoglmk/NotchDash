@@ -249,13 +249,12 @@ struct NotchView: View {
         }
     }
 
-    /// 进度条的渐变。色标按「剩余」语义标定，已用模式下整条左右翻转：
-    /// 剩余模式填得越多越安全（左危险→右安全），已用模式填得越多越危险。
-    private var barGradient: LinearGradient {
-        let stops: [Gradient.Stop] = model.showRemaining
-            ? usageRampStops.map { .init(color: $0.color, location: $0.at) }
-            : usageRampStops.reversed().map { .init(color: $0.color, location: 1 - $0.at) }
-        return LinearGradient(gradient: Gradient(stops: stops),
+    /// 进度条的填充色：整条用当前额度对应的颜色，条内只做轻微明暗过渡。
+    /// 不再让颜色沿填充长度变化——那表达的是「走过的历程」而非「当前状态」，
+    /// 会出现「已用 100% 的条子大半是绿色」这种反直觉的结果。
+    private func barFill(_ used: Double) -> LinearGradient {
+        let c = usageColorSmooth(used)
+        return LinearGradient(colors: [c.opacity(0.68), c],
                               startPoint: .leading, endPoint: .trailing)
     }
 
@@ -279,13 +278,9 @@ struct NotchView: View {
                         .fill(w.usedPercent >= 99.5
                               ? usageColor(100).opacity(0.30)
                               : .white.opacity(0.13))
-                    // 渐变按完整长度铺开，再遮罩出填充部分，
-                    // 这样填到哪儿就露出哪一段颜色，而不是把整条渐变压缩进填充段
-                    Rectangle()
-                        .fill(barGradient)
-                        .mask(alignment: .leading) {
-                            Capsule().frame(width: fill)
-                        }
+                    Capsule()
+                        .fill(barFill(w.usedPercent))
+                        .frame(width: fill)
                 }
                 .frame(width: full, height: 5)
 

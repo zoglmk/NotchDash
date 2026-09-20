@@ -41,24 +41,51 @@ final class AppModel: ObservableObject {
 /// 纯红在深色底上的感知亮度只有绿色的三分之二左右，看着发暗。
 /// 提高红色的绿蓝分量，把感知亮度拉回到和其他几档相当的水平。
 func usageColor(_ used: Double) -> Color {
-    let remaining = (100 - min(max(used, 0), 100)) / 100
+    let r = remainingRatio(used)
     // 取最后一个起点不超过当前余量的色标
-    var picked = usageRampStops[0].color
-    for stop in usageRampStops where stop.at <= remaining {
-        picked = stop.color
+    var picked = usageRampStops[0].rgb
+    for stop in usageRampStops where stop.at <= r {
+        picked = stop.rgb
     }
-    return picked
+    return Color(red: picked.r, green: picked.g, blue: picked.b)
+}
+
+/// 同一套色标，但在相邻档位之间线性插值，得到连续变化的颜色。
+/// 进度条用它：整条的颜色由当前额度决定，而不是沿填充路径铺一条色带——
+/// 那样「已用 100%」的条子会大半是绿的，完全看不出危险。
+func usageColorSmooth(_ used: Double) -> Color {
+    let r = remainingRatio(used)
+    let stops = usageRampStops
+    if r <= stops[0].at { return Color(red: stops[0].rgb.r, green: stops[0].rgb.g, blue: stops[0].rgb.b) }
+    if let last = stops.last, r >= last.at {
+        return Color(red: last.rgb.r, green: last.rgb.g, blue: last.rgb.b)
+    }
+    for i in 1..<stops.count where r <= stops[i].at {
+        let lo = stops[i - 1], hi = stops[i]
+        let span = hi.at - lo.at
+        let t = span > 0 ? (r - lo.at) / span : 0
+        return Color(red: lo.rgb.r + (hi.rgb.r - lo.rgb.r) * t,
+                     green: lo.rgb.g + (hi.rgb.g - lo.rgb.g) * t,
+                     blue: lo.rgb.b + (hi.rgb.b - lo.rgb.b) * t)
+    }
+    let last = stops[stops.count - 1]
+    return Color(red: last.rgb.r, green: last.rgb.g, blue: last.rgb.b)
 }
 
 /// 进度条渐变的色标，按「剩余比例」标定：0 = 见底，1 = 满格。
 ///
 /// 这几个位置没有客观标准，是按使用者的判断定的：剩余三成以上就算健康，
 /// 剩下的区间再往危险端切三档。想调就改这里，数字和进度条会一起跟着变。
-let usageRampStops: [(color: Color, at: Double)] = [
-    (Color(red: 1.00, green: 0.49, blue: 0.46), 0.00),   // 剩余 <8%：红
-    (Color(red: 0.99, green: 0.55, blue: 0.22), 0.08),   // 8~18%：橙
-    (Color(red: 0.98, green: 0.78, blue: 0.25), 0.18),   // 18~30%：黄
-    (Color(red: 0.30, green: 0.85, blue: 0.45), 0.30),   // ≥30%：绿
-    (Color(red: 0.30, green: 0.85, blue: 0.45), 1.00),   // 一路绿到满
+/// 存 RGB 分量而不是 Color，是为了能在色标之间做插值
+let usageRampStops: [(rgb: (r: Double, g: Double, b: Double), at: Double)] = [
+    ((1.00, 0.49, 0.46), 0.00),   // 剩余 <8%：红
+    ((0.99, 0.55, 0.22), 0.08),   // 8~18%：橙
+    ((0.98, 0.78, 0.25), 0.18),   // 18~30%：黄
+    ((0.30, 0.85, 0.45), 0.30),   // ≥30%：绿
 ]
+
+/// 把已用百分比换算成剩余比例（0~1）
+private func remainingRatio(_ used: Double) -> Double {
+    (100 - min(max(used, 0), 100)) / 100
+}
 
