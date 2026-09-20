@@ -107,16 +107,29 @@ struct NotchView: View {
         .animation(.easeOut(duration: 0.18), value: model.leftSlotWidth)
         .animation(.easeOut(duration: 0.18), value: model.rightSlotWidth)
         .animation(.easeOut(duration: 0.18), value: model.combinedWidth)
+        // 轮播换页时内容整体重排，宽度已按各页最大值固定，这里只让内容平滑切换
+        .animation(.easeInOut(duration: 0.38), value: model.carouselPage)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - 顶行（与刘海同高，中间那段是物理刘海，必须留空）
 
+    /// 给收起态内容套上翻页动画。关掉轮播时就是个普通容器。
+    @ViewBuilder private func carouselBox<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        content()
+            .id(model.carousel ? model.carouselPage : 0)
+            .transition(model.carousel ? pageTransition : .identity)
+            .animation(.easeInOut(duration: 0.38), value: model.carouselPage)
+    }
+
     /// 刘海正下方那一行：两个额度并排居中
     private var belowRow: some View {
-        HStack(spacing: bothSpacing) {
-            miniQuota(model.quota("claude"))
-            miniQuota(model.quota("codex"))
+        carouselBox {
+            HStack(spacing: bothSpacing) {
+                ForEach(Array(collapsedItems.enumerated()), id: \.offset) { _, item in
+                    chip(item)
+                }
+            }
         }
         .frame(height: belowRowHeight)
         .frame(maxWidth: .infinity)
@@ -147,25 +160,31 @@ struct NotchView: View {
         .onPreferenceChange(StatsWidthKey.self) { w in
             if w > 0, abs(w - model.statsRowWidth) > 1 { model.statsRowWidth = w }
         }
+        // 按页分别记录宽度，面板取各页最大值，轮播时才不会一胀一缩
         .onPreferenceChange(LeftSlotWidthKey.self) { w in
             guard !isExpanded, w > 0 else { return }
-            if leftOnly {
-                if abs(w - model.combinedWidth) > 0.5 { model.combinedWidth = w }
+            let page = model.carousel ? model.carouselPage : 0
+            if leftOnly || belowMode {
+                if abs((model.combinedWidths[page] ?? 0) - w) > 0.5 { model.combinedWidths[page] = w }
             } else if layout == "split" {
-                if abs(w - model.leftSlotWidth) > 0.5 { model.leftSlotWidth = w }
+                if abs((model.leftSlotWidths[page] ?? 0) - w) > 0.5 { model.leftSlotWidths[page] = w }
             }
         }
         .onPreferenceChange(RightSlotWidthKey.self) { w in
             guard !isExpanded, layout == "split", w > 0 else { return }
-            if abs(w - model.rightSlotWidth) > 0.5 { model.rightSlotWidth = w }
+            let page = model.carousel ? model.carouselPage : 0
+            if abs((model.rightSlotWidths[page] ?? 0) - w) > 0.5 { model.rightSlotWidths[page] = w }
         }
     }
 
     @ViewBuilder private var leftSlot: some View {
         if leftOnly {
-            HStack(spacing: bothSpacing) {
-                miniQuota(model.quota("claude"))
-                miniQuota(model.quota("codex"))
+            carouselBox {
+                HStack(spacing: bothSpacing) {
+                    ForEach(Array(collapsedItems.enumerated()), id: \.offset) { _, item in
+                        chip(item)
+                    }
+                }
             }
         } else if isExpanded {
             // 明确标出数字含义，否则「0%」会被读成「用了 0%」
@@ -173,7 +192,7 @@ struct NotchView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.45))
         } else {
-            miniQuota(model.quota("claude"))
+            carouselBox { chip(collapsedItems.first) }
         }
     }
 
@@ -190,8 +209,51 @@ struct NotchView: View {
             .buttonStyle(.plain)
             .help("刷新 / 配置 / 退出")
         } else if !leftOnly {
-            miniQuota(model.quota("codex"))
+            carouselBox { chip(collapsedItems.count > 1 ? collapsedItems[1] : nil) }
         }
+    }
+
+    /// 收起态当前这一页要显示的条目。
+    /// 开了轮播且有行情数据时，在「额度」和「行情」两页之间轮换。
+    private var collapsedItems: [(label: String, value: String, color: Color)] {
+        if model.carousel, model.carouselPage > 0, !model.custom.isEmpty {
+            let per = AppModel.itemsPerPage
+            let start = (model.carouselPage - 1) * per
+            guard start < model.custom.count else { return [] }
+            let slice = model.custom[start..<min(start + per, model.custom.count)]
+            // 一次只显示一个，点位放得下（「上证 3912 +0.94%」比额度页那两项还窄）
+            return slice.map {
+                ($0.label, $0.value, changeColor($0.value) ?? .white.opacity(0.9))
+            }
+        }
+        return ["claude", "codex"].compactMap { id -> (String, String, Color)? in
+            guard let q = model.quota(id), let used = q.headlinePercent else { return nil }
+            let shown = model.showRemaining ? 100 - used : used
+            return (q.short, q.headlineText ?? "\(Int(shown.rounded()))%", usageColor(used))
+        }
+    }
+
+    /// 一个条目：标签 + 数值。整体亮度恒定，只有数值带颜色。
+    @ViewBuilder private func chip(_ item: (label: String, value: String, color: Color)?) -> some View {
+        if let item {
+            HStack(spacing: 4) {
+                Text(item.label)
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .fixedSize()
+                Text(item.value)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(item.color)
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+        }
+    }
+
+    /// 轮播的上下滚动过渡
+    private var pageTransition: AnyTransition {
+        .asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity))
     }
 
     /// 收起态的紧凑额度：只有「标签 + 数字」。

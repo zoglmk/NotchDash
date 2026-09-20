@@ -19,11 +19,20 @@ final class AppModel: ObservableObject {
     /// Swift 6 里是宏，Command Line Tools 不带 SwiftUIMacros 插件，会编译不过。
     /// 左右两侧内容各自的实测宽度。必须分开存：两边内容宽度不同，
     /// 强行等宽会让窄的那侧在外缘多出一块黑边，肉眼很容易看出来。
-    @Published var leftSlotWidth: CGFloat = 52
-    @Published var rightSlotWidth: CGFloat = 52
+    @Published var leftSlotWidths: [Int: CGFloat] = [:]
+    @Published var rightSlotWidths: [Int: CGFloat] = [:]
+    /// 同上，只认额度页的宽度
+    var leftSlotWidth: CGFloat { leftSlotWidths[0] ?? 52 }
+    var rightSlotWidth: CGFloat { rightSlotWidths[0] ?? 52 }
     /// 靠左模式下「两个额度并排」的实测宽度。必须和上面两个分开存：
     /// 那两个记的是单个额度的宽度，拿来当并排宽度用会把内容裁掉。
-    @Published var combinedWidth: CGFloat = 112
+    /// 各页内容的实测宽度（键是页码）。
+    ///
+    /// 面板宽度只认第 0 页（额度页），不取各页最大值也不跟着当前页走：
+    /// 轮播时黑条必须纹丝不动，否则一胀一缩比不轮播还晃眼。
+    /// 行情每页只放一个，本来就比额度页窄，锁死在额度页宽度正合适。
+    @Published var combinedWidths: [Int: CGFloat] = [:]
+    var combinedWidth: CGFloat { combinedWidths[0] ?? 112 }
     /// 展开态底部那一行（系统状态 + 自定义数据源）的自然宽度。
     /// 自定义数据源是用户自己加的，多少、多长都不可预知，面板得跟着它变宽。
     @Published var statsRowWidth: CGFloat = 0
@@ -35,6 +44,19 @@ final class AppModel: ObservableObject {
     @Published var autoLayout: Bool = true
     /// 涨跌配色：true = 红涨绿跌
     @Published var redUp: Bool = true
+    /// 收起态是否轮换显示额度与行情
+    @Published var carousel: Bool = false
+    /// 当前轮到第几页：0 是额度，之后每页两个行情
+    @Published var carouselPage: Int = 0
+
+    /// 行情每页放几个。一次一个，黑条就不会被撑长。
+    static let itemsPerPage = 1
+
+    /// 一共几页：额度一页，行情每两个一页
+    var carouselPageCount: Int {
+        guard carousel, !custom.isEmpty else { return 1 }
+        return 1 + (custom.count + Self.itemsPerPage - 1) / Self.itemsPerPage
+    }
     /// 菜单栏两侧的剩余空间，nil 表示没有辅助功能权限、测不出来
     @Published var menuBarSpace: MenuBarProbe.Space?
     /// 点界面上那个按钮时弹菜单，由 AppDelegate 注入

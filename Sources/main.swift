@@ -124,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.collapsedLayout = config.collapsedLayout
         model.autoLayout = config.autoLayout
         model.redUp = config.redUp
+        model.carousel = config.carousel
         model.onShowMenu = { [weak self] in self?.showMenuAtMouse() }
 
         if let win = window {
@@ -151,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let items: [(String, Selector, String)] = [
             (model.showRemaining ? "改为显示已用" : "改为显示剩余", #selector(menuToggleMode), "t"),
+            (config.carousel ? "关闭轮播显示" : "轮播显示额度与行情", #selector(menuToggleCarousel), "p"),
 
             ("立即刷新", #selector(menuRefresh), "r"),
             ("打开配置文件", #selector(menuOpenConfig), ","),
@@ -355,6 +357,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc private func menuToggleCarousel() {
+        config.carousel.toggle()
+        writeConfig(["carousel": config.carousel])
+        startCarousel()
+        window?.contentView?.menu = buildMenu()
+    }
+
     @objc private func menuRefresh() {
         config = Config.load()
         refreshSystem()
@@ -407,6 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var config = Config.load()
     private var fastTimer: Timer?
     private var slowTimer: Timer?
+    private var carouselTimer: Timer?
     /// 串行队列：保证 SystemStatsProvider 的差分状态不会被并发访问
     private let collectQueue = DispatchQueue(label: "local.zgm.notchdash.collect", qos: .utility)
     /// 菜单栏探测单独一条队列。全量扫描要一秒多，挤在上面那条队列里
@@ -417,6 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshSystem()
         refreshQuotas()
         refreshMenuBarSpace()
+        startCarousel()
 
         // 切换 App：只有菜单长度会变，图标没动，用缓存快查即可
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -455,6 +466,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if self.menuBarTick % 3 == 0 {
                     self.refreshMenuBarSpace(rescanExtras: true)
                 }
+            }
+        }
+    }
+
+    /// 收起态轮播：在「额度」和「行情」之间来回翻
+    private func startCarousel() {
+        carouselTimer?.invalidate()
+        carouselTimer = nil
+        model.carousel = config.carousel
+        guard config.carousel else {
+            model.carouselPage = 0
+            return
+        }
+        let interval = max(config.carouselInterval, 2)
+        carouselTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // 没有行情数据就只剩一页，别翻成空白
+                let pages = self.model.carouselPageCount
+                guard pages > 1 else {
+                    self.model.carouselPage = 0
+                    return
+                }
+                self.model.carouselPage = (self.model.carouselPage + 1) % pages
             }
         }
     }
@@ -520,6 +555,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "left_slot_width": model.leftSlotWidth,
             "right_slot_width": model.rightSlotWidth,
             "updated_at": ISO8601DateFormatter().string(from: Date()),
+            "carousel_enabled": model.carousel,
+            "carousel_page": model.carouselPage,
+            "custom_item_count": model.custom.count,
+            "carousel_timer_running": carouselTimer != nil,
         ]
         if let space {
             obj["space_left"] = space.left
@@ -590,6 +629,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.model.quotas = snapshot
                     self?.model.custom = items
                     self?.model.showRemaining = cfg.showRemaining
+                    // 每轮都记一次状态，方便从外面看到实时情况
+                    self?.writeStatus(self?.model.menuBarSpace ?? nil)
                     self?.model.collapsedLayout = cfg.collapsedLayout
                     self?.model.autoLayout = cfg.autoLayout
                     self?.model.redUp = cfg.redUp
