@@ -15,6 +15,9 @@ final class AppModel: ObservableObject {
     /// 靠左模式下「两个额度并排」的实测宽度。必须和上面两个分开存：
     /// 那两个记的是单个额度的宽度，拿来当并排宽度用会把内容裁掉。
     @Published var combinedWidth: CGFloat = 112
+    /// 展开态底部那一行（系统状态 + 自定义数据源）的自然宽度。
+    /// 自定义数据源是用户自己加的，多少、多长都不可预知，面板得跟着它变宽。
+    @Published var statsRowWidth: CGFloat = 0
     /// 是否显示剩余额度（而不是已用）
     @Published var showRemaining: Bool = true
     /// 收起态排布："split" 左右分开 / "left" 全部靠左 / "below" 刘海正下方

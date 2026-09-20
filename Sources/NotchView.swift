@@ -9,10 +9,15 @@ struct NotchView: View {
     /// 兜底下限，避免首帧测量到 0 时面板闪一下
     private let minSlotContent: CGFloat = 52
 
-    /// 展开宽度跟随屏幕，小屏不至于超宽、大屏不至于显小
+    /// 展开宽度：先按屏幕定个基准，再保证底部那行内容放得下（自定义数据源
+    /// 数量和长度都由用户决定），最后不超过屏幕宽度。
     private var expandedWidth: CGFloat {
-        min(max(geo.screen.frame.width * 0.30, 430), 600)
+        let base = min(max(geo.screen.frame.width * 0.30, 430), 600)
+        let needed = model.statsRowWidth + detailPadding * 2 + 16
+        return min(max(base, needed), geo.screen.frame.width - 60)
     }
+    /// 展开态内容的左右内边距
+    private let detailPadding: CGFloat = 22
     /// 内容与刘海之间的水平留白
     private let gutter: CGFloat = 8
     /// 顶部反向圆角半径。注意：形状的黑色主体宽度只有 width - 2*topRadius，
@@ -139,6 +144,9 @@ struct NotchView: View {
         .clipped()
         // 只在左右分开且收起时才更新实测宽度。其他排布下两侧内容不一样，
         // 若照单全收就会变成「布局变→测量变→布局又变」的来回抖动。
+        .onPreferenceChange(StatsWidthKey.self) { w in
+            if w > 0, abs(w - model.statsRowWidth) > 1 { model.statsRowWidth = w }
+        }
         .onPreferenceChange(LeftSlotWidthKey.self) { w in
             guard !isExpanded, w > 0 else { return }
             if leftOnly {
@@ -217,8 +225,11 @@ struct NotchView: View {
             ForEach(model.quotas) { q in quotaRow(q) }
             Divider().overlay(.white.opacity(0.10)).padding(.vertical, 1)
             statsRow
+            // 自定义数据源单独一行：内容由用户决定，长度不可控（比如指数带
+            // 四到六位点位加涨跌幅），挤在系统状态后面迟早会被裁掉
+            if !model.custom.isEmpty { customRow }
         }
-        .padding(.horizontal, 22)
+        .padding(.horizontal, detailPadding)
         .padding(.top, 9)
         .padding(.bottom, 13)
         .frame(width: width, alignment: .leading)
@@ -292,21 +303,38 @@ struct NotchView: View {
         }
     }
 
-    /// 系统状态 + 自定义数据源，合并成一行
+    /// 系统状态行
     private var statsRow: some View {
-        HStack(spacing: 14) {
+        measuredRow {
             stat("CPU", String(format: "%.0f%%", model.stats.cpuPercent))
             stat("内存", String(format: "%.0f%%", model.stats.memoryPercent))
             stat("↓", SystemStats.rate(model.stats.netDownBytes))
             stat("↑", SystemStats.rate(model.stats.netUpBytes))
-            // 自定义源接在后面。一行放得下约 3~4 个，多了会被裁掉。
+        }
+    }
+
+    /// 自定义数据源行
+    private var customRow: some View {
+        measuredRow {
             ForEach(model.custom.sorted(by: { $0.key < $1.key }).prefix(4), id: \.key) { k, v in
                 stat(k, v)
             }
-            Spacer(minLength: 0)
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .clipped()
+    }
+
+    /// 一行内容：取自然宽度、上报给面板决定该多宽，然后左对齐。
+    ///
+    /// 这里不能留 Spacer 或用 maxWidth 再测量：那样量到的是容器宽度，
+    /// 而容器宽度又由这个量值决定，会一路撑到屏幕边缘。
+    private func measuredRow<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        HStack(spacing: 14) { content() }
+            .fixedSize()
+            .background(
+                GeometryReader { g in
+                    Color.clear.preference(key: StatsWidthKey.self, value: g.size.width)
+                }
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func stat(_ label: String, _ value: String) -> some View {
@@ -326,6 +354,14 @@ struct NotchView: View {
 protocol SlotWidthKeyProtocol: PreferenceKey where Value == CGFloat {}
 
 struct LeftSlotWidthKey: SlotWidthKeyProtocol {
+    static var defaultValue: CGFloat { 0 }
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// 展开态底部那行的自然宽度
+struct StatsWidthKey: SlotWidthKeyProtocol {
     static var defaultValue: CGFloat { 0 }
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
