@@ -19,11 +19,11 @@ struct UsageWindow: Equatable {
         guard let resetsAt else { return nil }
         let s = resetsAt.timeIntervalSinceNow
         guard s > 0 else { return "即将" }
-        let days = Int(s) / 86400
-        if days > 0 { return "\(days)天" }
-        let hours = Int(s) / 3600
-        if hours > 0 { return "\(hours)小时" }
-        return "\(max(Int(s) / 60, 1))分"
+        // 只保留一个单位，并四舍五入到该单位。
+        // 向下取整会让「2 小时 59 分」显示成「2 小时」，两小时后回来看却还没好。
+        if s >= 86400 { return "\(Int((s / 86400).rounded()))天" }
+        if s >= 3600 { return "\(Int((s / 3600).rounded()))小时" }
+        return "\(max(Int((s / 60).rounded()), 1))分"
     }
 
     /// 距离重置还有多久，如 "2h30m"
@@ -34,7 +34,8 @@ struct UsageWindow: Equatable {
         let d = Int(s) / 86400, h = Int(s) % 86400 / 3600, m = Int(s) % 3600 / 60
         if d > 0 { return "\(d)天\(h)小时" }
         if h > 0 { return "\(h)小时\(m)分" }
-        return "\(m)分钟"
+        // 不足一分钟时别显示「0分钟」
+        return m > 0 ? "\(m)分钟" : "即将重置"
     }
 }
 
@@ -50,16 +51,23 @@ struct Quota: Equatable, Identifiable {
     var source: String        // 数据来自哪条通道，用于排查问题
     var error: String?        // 取数失败时的原因
 
-    /// 收起态只显示一个最该关心的数字：优先短窗口，没有就用长窗口
-    var headlinePercent: Double? {
-        primary?.usedPercent ?? secondary?.usedPercent
+    /// 收起态只有一个数字的位置，显示**用得最狠的那个窗口**。
+    ///
+    /// 不能固定取 primary：各家套餐的窗口配置不一样，primary 的含义也跟着变
+    /// （见过 Codex 的 primary 直接是 7 天窗口、secondary 为空的情况）。
+    /// 而且就算两个窗口都在，真正卡住人的也未必是短的那个——
+    /// 5 小时还剩八成、周额度只剩 3% 时，显示 5 小时就是误导。
+    var headlineWindow: UsageWindow? {
+        [primary, secondary].compactMap { $0 }.max { $0.usedPercent < $1.usedPercent }
     }
+
+    var headlinePercent: Double? { headlineWindow?.usedPercent }
 
     /// 额度见底时，收起态改显示重置倒计时——都用完了，再看"0%"没有意义，
     /// 这时候真正要知道的是什么时候能接着用。
     var headlineText: String? {
-        guard let used = headlinePercent, used >= 99.5 else { return nil }
-        return (primary ?? secondary)?.compactResetText
+        guard let w = headlineWindow, w.usedPercent >= 99.5 else { return nil }
+        return w.compactResetText
     }
 
     /// 数据是否已经过期（超过 15 分钟没更新就标灰）
