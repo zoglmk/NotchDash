@@ -161,6 +161,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.target = self
             menu.addItem(item)
         }
+        // 行情
+        let stocksItem = NSMenuItem(title: "行情", action: nil, keyEquivalent: "")
+        stocksItem.submenu = buildStocksMenu()
+        menu.addItem(stocksItem)
+
         // 收起态排布
         let layoutItem = NSMenuItem(title: "收起态排布", action: nil, keyEquivalent: "")
         let sub = NSMenu()
@@ -195,6 +200,111 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         config.showRemaining = model.showRemaining
         writeConfig(["show_remaining": model.showRemaining])
         // 菜单标题要跟着变
+        window?.contentView?.menu = buildMenu()
+    }
+
+    /// 行情子菜单：常用标的直接勾选，个股走「添加代码」
+    private func buildStocksMenu() -> NSMenu {
+        let menu = NSMenu()
+        let chosen = Set(config.stocks.items.map(\.code))
+
+        for preset in StockPresets.all {
+            let it = NSMenuItem(title: preset.label, action: #selector(menuToggleStock(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = preset.code
+            it.state = chosen.contains(preset.code) ? .on : .off
+            menu.addItem(it)
+        }
+
+        // 用户自己添加的（不在预设里的）也列出来，方便取消
+        let extras = config.stocks.items.filter { StockPresets.label(for: $0.code) == nil }
+        if !extras.isEmpty {
+            menu.addItem(.separator())
+            for e in extras {
+                let it = NSMenuItem(title: "\(e.label)（\(e.code)）",
+                                    action: #selector(menuToggleStock(_:)), keyEquivalent: "")
+                it.target = self
+                it.representedObject = e.code
+                it.state = .on
+                menu.addItem(it)
+            }
+        }
+
+        menu.addItem(.separator())
+        let add = NSMenuItem(title: "添加代码…", action: #selector(menuAddStock), keyEquivalent: "")
+        add.target = self
+        menu.addItem(add)
+
+        menu.addItem(.separator())
+        let freq = NSMenuItem(title: "刷新频率", action: nil, keyEquivalent: "")
+        let sub = NSMenu()
+        for (title, sec) in [("10 秒", 10.0), ("30 秒", 30.0), ("1 分钟", 60.0), ("5 分钟", 300.0)] {
+            let it = NSMenuItem(title: title, action: #selector(menuSetStockInterval(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = sec
+            it.state = abs(config.stocks.interval - sec) < 0.5 ? .on : .off
+            sub.addItem(it)
+        }
+        freq.submenu = sub
+        menu.addItem(freq)
+        return menu
+    }
+
+    @objc private func menuToggleStock(_ sender: NSMenuItem) {
+        guard let code = sender.representedObject as? String else { return }
+        if let idx = config.stocks.items.firstIndex(where: { $0.code == code }) {
+            config.stocks.items.remove(at: idx)
+        } else {
+            let label = StockPresets.label(for: code)
+                ?? stockProvider.lookupName(code) ?? code
+            config.stocks.items.append(StockItem(label: label, code: code))
+        }
+        saveStocks()
+    }
+
+    @objc private func menuSetStockInterval(_ sender: NSMenuItem) {
+        guard let sec = sender.representedObject as? Double else { return }
+        config.stocks.interval = sec
+        saveStocks()
+    }
+
+    /// 弹窗输入一个代码，名称自动向接口查
+    @objc private func menuAddStock() {
+        let alert = NSAlert()
+        alert.messageText = "添加行情代码"
+        alert.informativeText = "个股直接填代码，如 sh600519（贵州茅台）、sz000001（平安银行）。\n名称会自动获取。"
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.placeholderString = "例如 sh600519"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "添加")
+        alert.addButton(withTitle: "取消")
+
+        // 面板是非激活窗口，不先激活的话输入框敲不进字
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.makeFirstResponder(field)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let code = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !code.isEmpty, !config.stocks.items.contains(where: { $0.code == code }) else { return }
+
+        guard let name = stockProvider.lookupName(code) else {
+            let fail = NSAlert()
+            fail.messageText = "查不到这个代码"
+            fail.informativeText = "「\(code)」没有返回行情数据，检查一下写法。\nA 股要带市场前缀：sh600519 / sz000001。"
+            fail.runModal()
+            return
+        }
+        config.stocks.items.append(StockItem(label: name, code: code))
+        saveStocks()
+    }
+
+    /// 写回配置并立即刷新
+    private func saveStocks() {
+        writeConfig(["stocks": [
+            "interval": config.stocks.interval,
+            "items": config.stocks.items.map { ["label": $0.label, "code": $0.code] },
+        ]])
+        refreshQuotas()
         window?.contentView?.menu = buildMenu()
     }
 

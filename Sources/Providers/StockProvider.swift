@@ -8,10 +8,34 @@ struct StockItem: Decodable {
     var code: String
 
     enum CodingKeys: String, CodingKey { case label, code }
+
+    // 自定义了 init(from:) 之后，memberwise 初始化器不再自动合成，得手写
+    init(label: String, code: String) {
+        self.label = label
+        self.code = code
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         label = try c.decode(String.self, forKey: .label)
         code = try c.decode(String.self, forKey: .code)
+    }
+}
+
+/// 菜单里可直接勾选的常用标的
+enum StockPresets {
+    static let all: [(label: String, code: String)] = [
+        ("上证指数", "s_sh000001"),
+        ("深证成指", "s_sz399001"),
+        ("创业板指", "s_sz399006"),
+        ("沪深300", "s_sh000300"),
+        ("恒生指数", "int_hangseng"),
+        ("道琼斯", "gb_dji"),
+        ("纳斯达克", "gb_ixic"),
+        ("标普500", "gb_inx"),
+    ]
+    static func label(for code: String) -> String? {
+        all.first { $0.code == code }?.label
     }
 }
 
@@ -38,14 +62,23 @@ struct StockConfig: Decodable {
 final class StockProvider: @unchecked Sendable {
     private var cache: [String: String] = [:]
     private var lastFetch: Date?
+    private var lastCodes = ""
 
     func fetch(_ cfg: StockConfig) -> [String: String] {
         guard !cfg.items.isEmpty else { return [:] }
+        let codes = cfg.items.map(\.code).joined(separator: ",")
+
+        // 标的列表变了就立刻重取，不等冷却——否则在菜单里加一只股票，
+        // 要干等一个刷新周期才看得见。
+        if codes != lastCodes {
+            lastCodes = codes
+            lastFetch = nil
+            cache = [:]
+        }
+
         let interval = max(cfg.interval, 10)
         if let last = lastFetch, Date().timeIntervalSince(last) < interval { return cache }
         lastFetch = Date()
-
-        let codes = cfg.items.map(\.code).joined(separator: ",")
         guard let url = URL(string: "https://hq.sinajs.cn/list=\(codes)") else { return cache }
         var req = URLRequest(url: url)
         // 这个接口校验来源，不带 Referer 会被拒
@@ -79,6 +112,9 @@ final class StockProvider: @unchecked Sendable {
         if code.hasPrefix("s_") {
             // A 股指数：名称,现价,涨跌额,涨跌幅
             price = Double(fields[1]); pct = Double(fields[3])
+        } else if code.hasPrefix("int_") {
+            // 国际指数：名称,现价,涨跌额,涨跌幅
+            price = Double(fields[1]); pct = Double(fields[3])
         } else if code.hasPrefix("gb_") {
             // 美股：名称,现价,涨跌幅,时间,涨跌额
             price = Double(fields[1]); pct = Double(fields[2])
@@ -91,6 +127,32 @@ final class StockProvider: @unchecked Sendable {
         }
         guard let p = price, p > 0, let c = pct else { return nil }
         return String(format: "%.0f %@%.2f%%", p, c >= 0 ? "+" : "", c)
+    }
+
+    /// 查一个代码对应的中文名称，用于「添加代码」时自动填标签。
+    /// 这里要正确按 GBK 解码——名称是要显示给人看的，不能像取数字那样凑合。
+    func lookupName(_ code: String) -> String? {
+        guard let url = URL(string: "https://hq.sinajs.cn/list=\(code)") else { return nil }
+        var req = URLRequest(url: url)
+        req.setValue("https://finance.sina.com.cn", forHTTPHeaderField: "Referer")
+        req.timeoutInterval = 6
+        guard let data = send(req) else { return nil }
+        let gbk = CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue))
+        guard let text = String(data: data, encoding: String.Encoding(rawValue: gbk)),
+              let r = text.range(of: "hq_str_\(code)=\""),
+              let end = text[r.upperBound...].firstIndex(of: "\"")
+        else { return nil }
+        let body = text[r.upperBound..<end]
+        guard !body.isEmpty else { return nil }
+        var name = body.components(separatedBy: ",").first ?? ""
+        // 港股那类返回「HSI,恒生指数,...」，第一段是英文代码
+        if name.range(of: "^[A-Za-z0-9.]+$", options: .regularExpression) != nil,
+           body.components(separatedBy: ",").count > 1 {
+            name = body.components(separatedBy: ",")[1]
+        }
+        name = name.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? nil : String(name.prefix(6))
     }
 
     private func send(_ req: URLRequest) -> Data? {
