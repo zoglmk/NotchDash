@@ -41,7 +41,7 @@ struct Config: Decodable {
     /// 收起态是否在「额度」和「行情」之间轮换显示
     var carousel: Bool = false
     /// 轮换间隔（秒），最小 2
-    var carouselInterval: Double = 5
+    var carouselInterval: Double = 10
     /// 股票 / 指数行情（内置采集，只要填代码）
     var stocks: StockConfig = StockConfig()
     /// 展开面板里额外显示的自定义数据（任意 shell 命令）
@@ -66,7 +66,7 @@ struct Config: Decodable {
         accessibilityPromptShown = try c.decodeIfPresent(Bool.self, forKey: .accessibilityPromptShown) ?? false
         redUp = try c.decodeIfPresent(Bool.self, forKey: .redUp) ?? true
         carousel = try c.decodeIfPresent(Bool.self, forKey: .carousel) ?? false
-        carouselInterval = try c.decodeIfPresent(Double.self, forKey: .carouselInterval) ?? 5
+        carouselInterval = try c.decodeIfPresent(Double.self, forKey: .carouselInterval) ?? 10
         stocks = try c.decodeIfPresent(StockConfig.self, forKey: .stocks) ?? StockConfig()
         customSources = try c.decodeIfPresent([CustomSource].self, forKey: .customSources) ?? []
     }

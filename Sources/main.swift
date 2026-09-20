@@ -152,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let items: [(String, Selector, String)] = [
             (model.showRemaining ? "改为显示已用" : "改为显示剩余", #selector(menuToggleMode), "t"),
-            (config.carousel ? "关闭轮播显示" : "轮播显示额度与行情", #selector(menuToggleCarousel), "p"),
+
 
             ("立即刷新", #selector(menuRefresh), "r"),
             ("打开配置文件", #selector(menuOpenConfig), ","),
@@ -163,6 +163,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.target = self
             menu.addItem(item)
         }
+        // 轮播
+        let carouselItem = NSMenuItem(title: "轮播", action: nil, keyEquivalent: "")
+        let cSub = NSMenu()
+        let toggle = NSMenuItem(title: "轮流显示额度与行情",
+                                action: #selector(menuToggleCarousel), keyEquivalent: "p")
+        toggle.target = self
+        toggle.state = config.carousel ? .on : .off
+        cSub.addItem(toggle)
+        cSub.addItem(.separator())
+        for (title, sec) in [("5 秒", 5.0), ("10 秒", 10.0), ("20 秒", 20.0), ("30 秒", 30.0)] {
+            let it = NSMenuItem(title: title, action: #selector(menuSetCarouselInterval(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = sec
+            it.state = abs(config.carouselInterval - sec) < 0.5 ? .on : .off
+            it.isEnabled = config.carousel
+            cSub.addItem(it)
+        }
+        carouselItem.submenu = cSub
+        menu.addItem(carouselItem)
+
         // 行情
         let stocksItem = NSMenuItem(title: "行情", action: nil, keyEquivalent: "")
         stocksItem.submenu = buildStocksMenu()
@@ -355,6 +375,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                   options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: Config.url)
         }
+    }
+
+    @objc private func menuSetCarouselInterval(_ sender: NSMenuItem) {
+        guard let sec = sender.representedObject as? Double else { return }
+        config.carouselInterval = sec
+        writeConfig(["carousel_interval": sec])
+        startCarousel()
+        window?.contentView?.menu = buildMenu()
     }
 
     @objc private func menuToggleCarousel() {
