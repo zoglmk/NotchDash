@@ -249,13 +249,12 @@ struct NotchView: View {
         }
     }
 
-    /// 进度条的填充色：整条用当前额度对应的颜色，条内只做轻微明暗过渡。
-    /// 不再让颜色沿填充长度变化——那表达的是「走过的历程」而非「当前状态」，
-    /// 会出现「已用 100% 的条子大半是绿色」这种反直觉的结果。
-    private func barFill(_ used: Double) -> LinearGradient {
-        let c = usageColorSmooth(used)
-        return LinearGradient(colors: [c.opacity(0.68), c],
-                              startPoint: .leading, endPoint: .trailing)
+    /// 进度条的填充色：整条纯色，和数字用同一个判定。
+    ///
+    /// 刻意不做条内渐变。试过在左端降透明度制造层次，但纯黑背景下
+    /// 降透明度等于和黑色混合，左边会发黑发脏。
+    private func barFill(_ used: Double) -> Color {
+        usageColor(used)
     }
 
     /// 按设置换算成要显示的数值：剩余 或 已用
@@ -276,7 +275,7 @@ struct NotchView: View {
                     // 轨道。额度耗尽时给点暗红底，否则空条看着像没数据
                     Capsule()
                         .fill(w.usedPercent >= 99.5
-                              ? usageColor(100).opacity(0.30)
+                              ? usageDangerColor.opacity(0.30)
                               : .white.opacity(0.13))
                     Capsule()
                         .fill(barFill(w.usedPercent))
