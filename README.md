@@ -2,6 +2,8 @@
 
 把 Claude Code / Codex 的额度和系统状态，常驻在 MacBook 刘海下方。
 
+[English](README.en.md)
+
 ![展开态](docs/screenshot-expanded.png)
 
 平时是刘海两侧的两个小数字，鼠标移上去展开完整面板。默认显示**剩余**额度——你真正要决策的是"还能不能继续干活"。
@@ -47,7 +49,19 @@ cd minitool
 ./install.sh --autostart  # 顺便注册开机自启
 ```
 
-要让 Claude Code 的额度流进来，还需要把状态栏指向本项目的旁路脚本。编辑 `~/.claude/settings.json`：
+### 或者用编译好的版本
+
+Release 里的包**没有 Apple 签名和公证**（那需要 99 美元/年的开发者账号），
+macOS 会拒绝打开并提示「已损坏」——这个提示是误导性的，文件本身没问题。
+解除隔离标记即可：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/NotchDash.app
+```
+
+### 让 Claude Code 的额度流进来
+
+还需要把状态栏指向本项目的旁路脚本。编辑 `~/.claude/settings.json`：
 
 ```json
 {
@@ -279,3 +293,7 @@ pkill -f NotchDash
 - Swift + SwiftUI + AppKit，`NSPanel` 置于菜单栏之上（`screenSaverWindow` 层级）
 - 刻意**不使用 SwiftUI 宏**（`@State` 等）：Command Line Tools 不带 `SwiftUIMacros` 插件，用了就必须装完整 Xcode 才能编译
 - 窗口固定为最大尺寸、内容自适应，展开/收起不 resize 窗口，动画无抖动
+
+## 许可
+
+MIT

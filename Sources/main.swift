@@ -446,10 +446,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var slowTimer: Timer?
     private var carouselTimer: Timer?
     /// 串行队列：保证 SystemStatsProvider 的差分状态不会被并发访问
-    private let collectQueue = DispatchQueue(label: "local.zgm.notchdash.collect", qos: .utility)
+    private let collectQueue = DispatchQueue(label: "app.notchdash.NotchDash.collect", qos: .utility)
     /// 菜单栏探测单独一条队列。全量扫描要一秒多，挤在上面那条队列里
     /// 会把 CPU / 网速的采样一起堵住，差分间隔就不准了。
-    private let menuBarQueue = DispatchQueue(label: "local.zgm.notchdash.menubar", qos: .utility)
+    private let menuBarQueue = DispatchQueue(label: "app.notchdash.NotchDash.menubar", qos: .utility)
 
     private func startRefreshing() {
         refreshSystem()

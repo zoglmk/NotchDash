@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 APP_NAME="NotchDash"
 DEST_DIR="$HOME/Applications"
 DEST="$DEST_DIR/$APP_NAME.app"
-PLIST="$HOME/Library/LaunchAgents/local.zgm.notchdash.plist"
+PLIST="$HOME/Library/LaunchAgents/app.notchdash.NotchDash.plist"
 
 echo "① 构建"
 ./build.sh
@@ -28,7 +28,7 @@ if [ "${1:-}" = "--autostart" ]; then
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>local.zgm.notchdash</string>
+  <key>Label</key><string>app.notchdash.NotchDash</string>
   <key>ProgramArguments</key>
   <array><string>$DEST/Contents/MacOS/$APP_NAME</string></array>
   <key>RunAtLoad</key><true/>
@@ -38,7 +38,7 @@ if [ "${1:-}" = "--autostart" ]; then
 </dict>
 </plist>
 PLIST_EOF
-  launchctl bootout "gui/$UID/local.zgm.notchdash" 2>/dev/null || true
+  launchctl bootout "gui/$UID/app.notchdash.NotchDash" 2>/dev/null || true
   launchctl bootstrap "gui/$UID" "$PLIST"
   echo "   已注册，开机自动启动"
 else

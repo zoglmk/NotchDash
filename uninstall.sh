@@ -3,10 +3,10 @@
 set -uo pipefail
 
 APP="$HOME/Applications/NotchDash.app"
-PLIST="$HOME/Library/LaunchAgents/local.zgm.notchdash.plist"
+PLIST="$HOME/Library/LaunchAgents/app.notchdash.NotchDash.plist"
 
 echo "① 停止运行"
-launchctl bootout "gui/$UID/local.zgm.notchdash" 2>/dev/null || true
+launchctl bootout "gui/$UID/app.notchdash.NotchDash" 2>/dev/null || true
 pkill -f "NotchDash" 2>/dev/null || true
 rm -f "$PLIST"
 
