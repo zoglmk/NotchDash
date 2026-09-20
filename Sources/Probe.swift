@@ -1,0 +1,123 @@
+import Foundation
+
+/// 命令行自检：不启动界面，直接把当前采集到的数据打印出来。
+/// 用来确认数据链路是否通，以及排查「面板上数字不对」这类问题。
+enum Probe {
+    /// 只测 OAuth 兜底通道，绕开本地主通道。
+    /// 用来确认钥匙串读取、token 有效性、端点连通性是否正常。
+    static func runOAuthOnly() {
+        print("OAuth 兜底通道单独测试")
+        print(String(repeating: "─", count: 52))
+        let oauth = OAuthUsageProvider()
+        for (name, q) in [("Claude Code", oauth.fetchClaude()), ("Codex", oauth.fetchCodex())] {
+            guard let q else {
+                print("  \(name): ✗ 失败（拿不到 token、token 已过期、端点变更或网络不通）")
+                continue
+            }
+            print("  \(name): ✓ 成功  [来源: \(q.source)]\(q.plan.map { "  套餐 \($0)" } ?? "")")
+            for (tag, w) in [("短窗口", q.primary), ("长窗口", q.secondary)] {
+                guard let w else { continue }
+                print(String(format: "    %@ (%@) %5.1f%%   %@", tag, w.label, w.usedPercent,
+                             w.resetText.map { "\($0)后重置" } ?? ""))
+            }
+        }
+        print(String(repeating: "─", count: 52))
+    }
+
+    /// 菜单栏空间自检
+    static func runMenuBar() {
+        print("菜单栏空间探测")
+        print(String(repeating: "─", count: 52))
+        let probe = MenuBarProbe()
+        print("辅助功能权限: \(probe.isAuthorized ? "✅ 已授权" : "❌ 未授权")")
+        guard probe.isAuthorized else {
+            print("→ 系统设置 → 隐私与安全性 → 辅助功能，把 NotchDash 加进去")
+            print("→ 没有这个权限也能用，只是要自己在菜单里选排布")
+            return
+        }
+        guard let geo = NotchGeometry() else { print("拿不到屏幕"); return }
+        let l = geo.screen.frame.midX - geo.notchWidth / 2
+        let r = geo.screen.frame.midX + geo.notchWidth / 2
+        print(String(format: "刘海: %.1f ~ %.1f （宽 %.1f）", l, r, geo.notchWidth))
+        guard let s = probe.probe(notchLeft: l, notchRight: r, screenFrame: geo.screen.frame) else {
+            print("探测失败"); return
+        }
+        print(String(format: "左侧可用 %.1f 点    右侧可用 %.1f 点", s.left, s.right))
+        print()
+        let need单 = 52.0 + 8 + 10 + 7
+        let need双 = 43.0 + 14 + 51 + 8 + 10 + 7
+        print(String(format: "  左右分开需要   右 ≥ %.0f      → %@", need单,
+                     s.right >= need单 ? "✅ 放得下" : "❌ 放不下"))
+        print(String(format: "  全部靠左需要   左 ≥ %.0f     → %@", need双,
+                     s.left >= need双 ? "✅ 放得下" : "❌ 放不下"))
+        let pick = s.right >= need单 ? "刘海左右分开" : (s.left >= need双 ? "全部靠左" : "刘海正下方")
+        print("\n👉 自动选择: \(pick)")
+        print(String(repeating: "─", count: 52))
+    }
+
+    static func run() {
+        print("NotchDash 数据自检")
+        print(String(repeating: "─", count: 52))
+
+        // CPU 要两次采样求差，先打一针基线
+        let sys = SystemStatsProvider()
+        _ = sys.sample()
+        Thread.sleep(forTimeInterval: 0.6)
+        let s = sys.sample()
+        print("【系统状态】")
+        print(String(format: "  CPU      %.1f%%", s.cpuPercent))
+        print(String(format: "  内存     %.1f%%  (%.1f / %.1f GB)",
+                     s.memoryPercent, s.memoryUsedGB, s.memoryTotalGB))
+        if let b = s.batteryPercent {
+            print("  电池     \(b)%\(s.batteryCharging ? " (充电中)" : "")"
+                  + (s.batteryTimeLeft.map { "  剩余 \($0)" } ?? ""))
+        } else {
+            print("  电池     无（台式机或读取失败）")
+        }
+        print("  网速     ↓ \(SystemStats.rate(s.netDownBytes))/s   ↑ \(SystemStats.rate(s.netUpBytes))/s")
+
+        let cfg = Config.load()
+        print("\n【配置】 \(FileManager.default.fileExists(atPath: Config.url.path) ? Config.url.path : "使用默认值（无配置文件）")")
+        print("  OAuth 兜底: \(cfg.oauthFallback ? "开启" : "关闭")   自定义数据源: \(cfg.customSources.count) 个")
+
+        print("\n【额度】")
+        var list = [ClaudeUsageProvider().fetch(), CodexUsageProvider().fetch()]
+        if cfg.oauthFallback {
+            let oauth = OAuthUsageProvider()
+            for i in list.indices where list[i].error != nil || list[i].isStale {
+                print("  ↻ \(list[i].name) 本地数据不可用/已过期，尝试 API 兜底…")
+                if let fb = list[i].id == "claude" ? oauth.fetchClaude() : oauth.fetchCodex() {
+                    list[i] = fb
+                    print("    ✓ 兜底成功")
+                } else {
+                    print("    ✗ 兜底失败，保留本地数据")
+                }
+            }
+        }
+        for q in list {
+            print("  \(q.name)  [来源: \(q.source)]")
+            if let e = q.error {
+                print("    ⚠️  \(e)")
+                continue
+            }
+            if let p = q.plan { print("    套餐: \(p)") }
+            for (tag, w) in [("短窗口", q.primary), ("长窗口", q.secondary)] {
+                guard let w else { continue }
+                let filled = Int(min(w.usedPercent, 100) / 10)
+                let bar = String(repeating: "█", count: filled)
+                        + String(repeating: "░", count: 10 - filled)
+                print(String(format: "    %@ (%@) %@ %5.1f%%   %@",
+                             tag, w.label, bar, w.usedPercent, w.resetText.map { "\($0)后重置" } ?? ""))
+            }
+            print("    更新于: \(q.staleText ?? "未知")\(q.isStale ? "  ⚠️ 已过期" : "")")
+        }
+        if !cfg.customSources.isEmpty {
+            print("\n【自定义数据源】")
+            let values = CustomSourceProvider().fetch(cfg.customSources)
+            for src in cfg.customSources {
+                print("  \(src.label) = \(values[src.label] ?? "—")   ← \(src.command)")
+            }
+        }
+        print(String(repeating: "─", count: 52))
+    }
+}
