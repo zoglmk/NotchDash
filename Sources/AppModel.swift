@@ -32,18 +32,22 @@ final class AppModel: ObservableObject {
     func quota(_ id: String) -> Quota? { quotas.first { $0.id == id } }
 }
 
-/// 进度条渐变用的色标。数字一律常亮白色，颜色只用在进度条上。
+/// 额度 → 颜色。入参是**已用**百分比。
+///
+/// 档位直接取自进度条那套色标（usageRampStops），不另立一套阈值：
+/// 两处各写各的迟早会对不上，出现「数字已经红了、进度条还是橙的」这种别扭情况。
 ///
 /// 红色为什么调得偏粉：人眼对绿光最敏感、对红光最不敏感，同样饱和度下
 /// 纯红在深色底上的感知亮度只有绿色的三分之二左右，看着发暗。
 /// 提高红色的绿蓝分量，把感知亮度拉回到和其他几档相当的水平。
-func usageColor(_ pct: Double) -> Color {
-    switch pct {
-    case ..<50:  return Color(red: 0.30, green: 0.85, blue: 0.45)   // 感知亮度 ≈180
-    case ..<80:  return Color(red: 0.98, green: 0.78, blue: 0.25)   // ≈200
-    case ..<95:  return Color(red: 0.99, green: 0.55, blue: 0.22)   // ≈158
-    default:     return Color(red: 1.00, green: 0.49, blue: 0.46)   // ≈150（原来只有 123）
+func usageColor(_ used: Double) -> Color {
+    let remaining = (100 - min(max(used, 0), 100)) / 100
+    // 取最后一个起点不超过当前余量的色标
+    var picked = usageRampStops[0].color
+    for stop in usageRampStops where stop.at <= remaining {
+        picked = stop.color
     }
+    return picked
 }
 
 /// 进度条渐变的色标，按「剩余比例」标定：0 = 见底，1 = 满格。
