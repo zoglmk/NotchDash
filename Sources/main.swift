@@ -292,6 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let codexProvider = CodexUsageProvider()
     private let oauthProvider = OAuthUsageProvider()
     private let customProvider = CustomSourceProvider()
+    private let stockProvider = StockProvider()
     private let menuBarProbe = MenuBarProbe()
     private var config = Config.load()
     private var fastTimer: Timer?
@@ -444,7 +445,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let claude = claudeProvider, codex = codexProvider
-        let oauth = oauthProvider, custom = customProvider
+        let oauth = oauthProvider, custom = customProvider, stocks = stockProvider
         let cfg = config
         collectQueue.async { [weak self] in
             // 主通道：纯本地读文件，零风险
@@ -459,12 +460,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
+            // 行情在前、自定义命令在后，各自保持配置里的顺序
+            let quotes = stocks.fetch(cfg.stocks)
             let customValues = custom.fetch(cfg.customSources)
+            var items: [DisplayItem] = []
+            for item in cfg.stocks.items {
+                if let v = quotes[item.label] {
+                    items.append(DisplayItem(id: items.count, label: item.label, value: v))
+                }
+            }
+            for src in cfg.customSources {
+                if let v = customValues[src.label] {
+                    items.append(DisplayItem(id: items.count, label: src.label, value: v))
+                }
+            }
             let snapshot = list
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.model.quotas = snapshot
-                    self?.model.custom = customValues
+                    self?.model.custom = items
                     self?.model.showRemaining = cfg.showRemaining
                     self?.model.collapsedLayout = cfg.collapsedLayout
                     self?.model.autoLayout = cfg.autoLayout

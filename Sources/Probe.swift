@@ -131,6 +131,13 @@ enum Probe {
             }
             print("    更新于: \(q.staleText ?? "未知")\(q.isStale ? "  ⚠️ 已过期" : "")")
         }
+        if !cfg.stocks.items.isEmpty {
+            print("\n【行情】每 \(Int(max(cfg.stocks.interval, 10))) 秒刷新")
+            let quotes = StockProvider().fetch(cfg.stocks)
+            for item in cfg.stocks.items {
+                print("  \(item.label) = \(quotes[item.label] ?? "—")   ← \(item.code)")
+            }
+        }
         if !cfg.customSources.isEmpty {
             print("\n【自定义数据源】")
             let values = CustomSourceProvider().fetch(cfg.customSources)

@@ -1,11 +1,20 @@
 import SwiftUI
 
+/// 底部那行的一个条目
+struct DisplayItem: Identifiable, Equatable {
+    let id: Int
+    let label: String
+    let value: String
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var isExpanded = false
     @Published var quotas: [Quota] = []
     @Published var stats = SystemStats()
-    @Published var custom: [String: String] = [:]
+    /// 展开面板底部那行要显示的条目。用数组而不是字典，
+    /// 否则显示顺序由字母序决定，跟配置里写的顺序对不上。
+    @Published var custom: [DisplayItem] = []
     /// 收起态单侧内容的实测宽度。放在这里而不是用 @State，是因为 @State 在
     /// Swift 6 里是宏，Command Line Tools 不带 SwiftUIMacros 插件，会编译不过。
     /// 左右两侧内容各自的实测宽度。必须分开存：两边内容宽度不同，

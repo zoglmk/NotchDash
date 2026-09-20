@@ -316,8 +316,8 @@ struct NotchView: View {
     /// 自定义数据源行
     private var customRow: some View {
         measuredRow {
-            ForEach(model.custom.sorted(by: { $0.key < $1.key }).prefix(4), id: \.key) { k, v in
-                stat(k, v, color: changeColor(v))
+            ForEach(model.custom.prefix(5)) { item in
+                stat(item.label, item.value, color: changeColor(item.value))
             }
         }
     }

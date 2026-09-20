@@ -38,7 +38,9 @@ struct Config: Decodable {
     var accessibilityPromptShown: Bool = false
     /// 自定义数据源里涨跌的配色：true = 红涨绿跌（A 股习惯），false = 绿涨红跌
     var redUp: Bool = true
-    /// 展开面板里额外显示的自定义数据
+    /// 股票 / 指数行情（内置采集，只要填代码）
+    var stocks: StockConfig = StockConfig()
+    /// 展开面板里额外显示的自定义数据（任意 shell 命令）
     var customSources: [CustomSource] = []
 
     static let url = FileManager.default.homeDirectoryForCurrentUser
@@ -59,12 +61,13 @@ struct Config: Decodable {
         autoLayout = try c.decodeIfPresent(Bool.self, forKey: .autoLayout) ?? true
         accessibilityPromptShown = try c.decodeIfPresent(Bool.self, forKey: .accessibilityPromptShown) ?? false
         redUp = try c.decodeIfPresent(Bool.self, forKey: .redUp) ?? true
+        stocks = try c.decodeIfPresent(StockConfig.self, forKey: .stocks) ?? StockConfig()
         customSources = try c.decodeIfPresent([CustomSource].self, forKey: .customSources) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
         case oauthFallback, showRemaining, collapsedLayout, autoLayout
-        case accessibilityPromptShown, redUp, customSources
+        case accessibilityPromptShown, redUp, stocks, customSources
     }
 
     static func load() -> Config {
