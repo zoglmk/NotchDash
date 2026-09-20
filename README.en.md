@@ -1,8 +1,12 @@
 # NotchDash
 
-Claude Code / Codex quota and system stats, living under your MacBook's notch.
+Displays Claude Code / Codex quota, system stats and market indices under the MacBook notch.
 
 [中文说明](README.md)
+
+## Screenshots
+
+Collapsed, showing only key numbers beside the notch and blending into its black:
 
 ![Collapsed](docs/screenshot-collapsed.png)
 
@@ -10,145 +14,141 @@ Hover to expand:
 
 ![Expanded](docs/screenshot-expanded.png)
 
-## First, the notch itself does not light up
-
-The notch is the physical camera housing — there are **no pixels** there. Nothing can be
-displayed on it, ever.
-
-What this kind of tool actually does is draw a pure-black window directly below the notch
-so it blends seamlessly with the notch's own black. NotchDash does the same.
+The notch is the physical camera housing. There are no pixels there and nothing can be
+displayed on it. What this tool does is draw a black window directly below the notch so that
+it joins the notch's own black, making the notch appear larger.
 
 ## Features
 
-- **Claude Code / Codex quota** — used or remaining percentage, reset countdown, colored by state
-- **System stats** — CPU, memory, live network throughput
-- **Stock indices** — A-shares, US and HK indices, colored by gain/loss
-- **Carousel** — rotate quota and market data in the collapsed bar without changing its width
-- **Auto-avoidance** — measures where your menu bar icons actually are, then picks a layout
-  that does not collide with them
+- Claude Code and Codex quota: remaining or used percentage, reset countdown, colored by
+  state. Switches to showing the recovery time once the quota runs out
+- System stats: CPU, memory, live network throughput
+- Market indices: A-shares, Hong Kong and US, colored by gain or loss
+- Carousel: alternates between quota and market data in the collapsed bar without changing
+  its width
+- Auto-avoidance: reads where menu bar icons actually are and picks a layout that does not
+  overlap them
+- Custom sources: display the output of any shell command
 
-## Where the quota data comes from
+## Installation
 
-Two channels. The **local one always wins**; the API is only a fallback when local data is
-missing or stale:
+### From source
 
-| Tool | Primary (local, no credentials) | Fallback (network) |
-|---|---|---|
-| Claude Code | `rate_limits` from the official statusline payload (v2.1.6+), persisted by `scripts/statusline.sh` | `api.anthropic.com/api/oauth/usage` |
-| Codex | `rate_limits` in `token_count` events inside `~/.codex/sessions/**/*.jsonl` | `chatgpt.com/backend-api/wham/usage` |
-
-The primary channel only reads local files — no credentials, no network. The tradeoff is that
-data stops updating while Claude Code / Codex is not running (the UI marks it "X minutes ago").
-The fallback uses the login state already on your machine to ask the vendor directly.
-
-**The fallback is on by default and can be turned off.** It relies on undocumented endpoints,
-so it may break whenever the vendor changes them — which is exactly why it is only a fallback.
-
-## Install
-
-Only Command Line Tools required — **no full Xcode needed**:
+Only Command Line Tools is required. A full Xcode installation is not needed.
 
 ```bash
-xcode-select --install     # if you have not already
-git clone <this repo>
+xcode-select --install          # if not already installed
+git clone https://github.com/zoglmk/NotchDash.git
 cd NotchDash
-./install.sh               # build and install to ~/Applications
-./install.sh --autostart   # also register a launch agent
+./install.sh                    # build and install to ~/Applications
+./install.sh --autostart        # also register a launch agent
 ```
 
-### Or grab a release build
+### From releases
 
-Download the zip from [Releases](../../releases), unpack it and drag `NotchDash.app`
-into Applications.
+Download the zip from [Releases](https://github.com/zoglmk/NotchDash/releases), unpack it and
+move `NotchDash.app` into Applications. The first launch needs one extra step, see
+Troubleshooting below.
 
-**The first launch will be blocked**, with a message claiming the app "is damaged and
-should be moved to the Trash". That message is misleading — nothing is damaged, the app
-simply is not signed or notarized (which requires a $99/year Apple Developer account).
-Either of these clears it:
+### Connecting Claude Code quota
 
-**Option 1: command line (fastest)**
-
-```bash
-xattr -dr com.apple.quarantine /Applications/NotchDash.app
-```
-
-This only strips the quarantine flag macOS attaches to downloaded files. Double-click works
-afterwards.
-
-**Option 2: System Settings**
-
-1. Double-click `NotchDash.app`, dismiss the warning
-2. Open System Settings → Privacy & Security, scroll down
-3. Under "Security" you will see "NotchDash was blocked" — click **Open Anyway**
-4. Confirm once more
-
-> Right-clicking the icon and choosing Open **no longer works** on macOS 15 and later.
-
-Building from source with `./install.sh` avoids all of this — locally compiled binaries carry
-no quarantine flag.
-
-### Feeding it Claude Code quota
-
-Point your statusline at the bundled relay script in `~/.claude/settings.json`:
+Claude Code exposes quota through its statusline payload. Point it at the relay script in
+`~/.claude/settings.json`:
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "/your/path/minitool/scripts/statusline.sh"
+    "command": "/your/path/NotchDash/scripts/statusline.sh"
   }
 }
 ```
 
-It copies the quota data aside, then forwards the original input downstream, so **your
-terminal statusline keeps working unchanged**. It auto-detects claude-hud; set
-`NOTCHDASH_DOWNSTREAM` to use something else.
+The script copies the quota data for this tool, then forwards the original input downstream,
+so your terminal statusline keeps working as before. It detects claude-hud automatically; set
+`NOTCHDASH_DOWNSTREAM` to use a different program.
 
-> Back up your original `command` value first. `uninstall.sh` restores it automatically
-> if the change was made by these scripts.
+Back up your existing `command` value first. If the change was made by the scripts in this
+project, `uninstall.sh` restores it automatically.
 
-## When the panel covers menu bar icons
+Codex requires no additional setup.
 
-Menu bar icons fill from the right, and once the right side is full they **skip over the notch
-and continue on the left** — so both sides can collide with the panel.
+## Troubleshooting
 
-NotchDash measures this itself: it reads each status item's coordinates through the
-accessibility API, computes the free space on either side of the notch, and picks a layout
-that fits:
+### "NotchDash is damaged and can't be opened"
 
-| Layout | Chosen when |
+This project is not signed or notarized, which requires an Apple Developer account at $99 per
+year. Downloaded builds are blocked by Gatekeeper. The file is not damaged; this is the
+standard macOS wording for unsigned applications.
+
+Option 1, command line:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/NotchDash.app
+```
+
+Option 2, System Settings:
+
+1. Double-click the app, dismiss the warning
+2. Open System Settings → Privacy & Security and scroll down
+3. Click "Open Anyway" under Security
+4. Confirm once more
+
+Right-clicking the icon and choosing Open no longer works on macOS 15 and later. Builds
+compiled from source are unaffected.
+
+### Automatic layout does not work
+
+Auto-avoidance needs Accessibility permission to read the coordinates of menu bar icons.
+
+1. The app asks once on first launch; click "Open System Settings"
+2. Or open System Settings → Privacy & Security → Accessibility manually
+3. Find NotchDash in the list and switch it on
+4. No restart required, it takes effect within 20 seconds
+
+The app works without this permission; you simply pick the layout yourself from the
+"Collapsed layout" submenu.
+
+Updating the app may invalidate the grant. macOS identifies applications by signature, so
+replacing the `.app` can silently disable auto-layout. Select NotchDash in the list, remove it
+with the `−` button and add it again. If two NotchDash entries appear, delete the stale one.
+
+The current state is recorded as `accessibility_authorized` in `~/.notchdash/status.json`.
+
+### Claude Code stays on "waiting for statusline"
+
+The statusline is not pointing at the relay script, or the current session has not produced
+its first model response yet.
+
+### Codex shows "stale"
+
+Normal if Codex has not been used recently. Local data older than 15 minutes is considered
+stale, and the API fallback takes over when enabled.
+
+### The panel covers menu bar icons
+
+Menu bar icons fill from the right, and once the right side is full they skip over the notch
+and continue on the left, so both sides can collide with the panel. With Accessibility
+permission granted, the app measures the free space on each side and picks a layout:
+
+| Layout | Used when |
 |---|---|
-| Split across the notch | Both sides have room (best looking) |
+| Split across the notch | Both sides have room |
 | All on the left | Right side too tight, left side fits |
-| Below the notch | Neither fits — stays off the menu bar entirely, but covers ~21pt of window content |
+| Below the notch | Neither fits. Stays off the menu bar but covers about 21pt of window content |
 
-#### Accessibility permission
+It can also be set manually from the menu.
 
-Reading status item coordinates goes through the accessibility API, so it needs permission:
+### Quitting
 
-1. On first launch NotchDash asks once — click "Open System Settings"
-2. Or go to System Settings → Privacy & Security → Accessibility manually
-3. Find **NotchDash** in the list and switch it on
-4. No restart needed, it takes effect within 20 seconds
-
-**Declining is fine** — everything still works, you just pick the layout yourself from the
-`⋯` menu → "Collapsed layout".
-
-When you may need to re-authorize:
-
-- **After updating the app** — macOS identifies apps by signature, so replacing the `.app`
-  can invalidate the grant. The symptom is auto-layout silently stopping. Remove NotchDash
-  from the list (select it, press `−`) and add it again
-- **Two NotchDash entries in the list** — delete the stale one
-
-To check whether it currently has permission, look at `accessibility_authorized` in
-`~/.notchdash/status.json`, or see whether the menu shows "Auto" as
-"needs Accessibility permission".
+Right-click the panel, or click `⋯` after expanding, and choose "Quit NotchDash". Running
+`pkill -f NotchDash` also works.
 
 ## Configuration
 
-Almost everything is in the right-click menu: display mode, carousel, indices, layout.
-The config file at `~/.notchdash/config.json` is the fallback:
+Most options are available from the right-click menu, including display mode, carousel,
+indices and layout. The config file is `~/.notchdash/config.json` and changes take effect
+within 20 seconds.
 
 ```json
 {
@@ -156,7 +156,9 @@ The config file at `~/.notchdash/config.json` is the fallback:
   "show_remaining": true,
   "carousel": true,
   "carousel_interval": 10,
-  "red_up": true,
+  "red_up": false,
+  "auto_layout": true,
+  "collapsed_layout": "split",
   "stocks": {
     "interval": 60,
     "items": [
@@ -170,52 +172,126 @@ The config file at `~/.notchdash/config.json` is the fallback:
 }
 ```
 
-- `red_up` — `true` means red for gains (Chinese convention), `false` means green for gains
-- `custom_sources` — any shell command; the first line of stdout is displayed.
-  ⚠️ These run as you do. Do not paste configs you do not trust.
+| Field | Description |
+|---|---|
+| `oauth_fallback` | Whether the API fallback is allowed. Set to `false` for no network access and no credential reads |
+| `show_remaining` | `true` shows remaining quota, `false` shows used quota |
+| `carousel` / `carousel_interval` | Carousel switch and interval in seconds, minimum 2 |
+| `red_up` | `true` colors gains red (Chinese convention), `false` colors gains green |
+| `auto_layout` | Whether to pick the layout from measured menu bar usage. Requires Accessibility permission |
+| `collapsed_layout` | Layout used when auto-layout is off: `split`, `left` or `below` |
 
-## Privacy
+Regardless of display mode, colors are always computed from the used percentage. Anything
+below 30% remaining turns red.
 
-- The primary channel only reads local files and never touches the network
-- The fallback reads login state already present on your machine (Claude: Keychain item
-  `Claude Code-credentials`; Codex: `~/.codex/auth.json`) and sends it **only to each vendor's
-  own domain**. Nothing is stored, cached or forwarded anywhere else
-- Tokens are never refreshed by this app — that is left to Claude Code / Codex themselves
+### Market indices
 
-## Adapting to your machine
+Select common indices from the "Indices" submenu, or use "Add symbol" to enter an individual
+stock; its name is fetched automatically. Refresh interval ranges from 10 seconds to 5 minutes.
 
-Notch size, wing widths and panel width are all measured at runtime. No hardcoded model numbers:
+Common codes:
 
-- Notch dimensions come from `NSScreen.safeAreaInsets` and `auxiliaryTopLeft/RightArea`
-- Collapsed wing width is derived from the actual rendered width of its content, so a different
-  font, language or longer numbers will not clip
-- Re-measures on resolution/scaling changes, display hotplug and lid open/close
+| Code | Symbol | Code | Symbol |
+|---|---|---|---|
+| `gb_dji` | Dow Jones | `s_sh000001` | SSE Composite |
+| `gb_ixic` | NASDAQ | `s_sz399001` | SZSE Component |
+| `gb_inx` | S&P 500 | `int_hangseng` | Hang Seng |
+
+Individual stocks use their plain code, such as `sh600519` or `sz000001`.
+
+Data comes from a public Sina Finance endpoint and requires no API key. During trading hours
+it is a quote snapshot; free endpoints typically lag by seconds to minutes, and with the
+polling interval on top the result is near real time. Outside trading hours it shows the last
+close.
+
+### Custom sources
+
+Each entry runs a shell command and displays the first line of stdout, up to 24 characters.
+A command is terminated if it runs longer than 5 seconds. Output containing a signed
+percentage is colored as a gain or loss.
+
+Commands run as your user. Do not use configurations from untrusted sources.
+
+## Data sources
+
+Quota data has two channels. The local one takes priority; the API is used only when local
+data is missing or stale:
+
+| Tool | Local channel | API fallback |
+|---|---|---|
+| Claude Code | `rate_limits` in the statusline payload (v2.1.6+) | `api.anthropic.com/api/oauth/usage` |
+| Codex | `rate_limits` in `token_count` events in `~/.codex/sessions/**/*.jsonl` | `chatgpt.com/backend-api/wham/usage` |
+
+The local channel only reads files on your machine, with no credentials and no network
+access. The tradeoff is that data stops updating while the corresponding program is not
+running; the UI shows the last update time.
+
+The API fallback uses login state already present on your machine (Claude reads the Keychain
+item `Claude Code-credentials`, Codex reads `~/.codex/auth.json`) and sends it only to each
+vendor's own domain. Nothing is stored, cached or forwarded. This app never refreshes tokens;
+that is left to Claude Code and Codex.
+
+The fallback relies on undocumented endpoints and may break when vendors change them, which
+is why it is only a fallback. It can be disabled with `oauth_fallback`.
+
+After switching accounts, the Claude Code statusline channel reflects the new account
+immediately, while the API fallback may lag by one rate-limit window (5 minutes). Codex
+session logs contain no account information, so the app uses `account_id` from
+`~/.codex/auth.json` as the reference: when it changes, only logs written after that point are
+used, and the API is queried again immediately.
+
+## Compatibility
+
+Notch dimensions, menu bar height and panel width are all measured at runtime. No model
+specific values are hardcoded.
+
+- Notch dimensions come from `NSScreen.safeAreaInsets` and `auxiliaryTopLeftArea` /
+  `auxiliaryTopRightArea`
+- Collapsed width is derived from the actual rendered width of the content, so a different
+  font, language or number of digits will not clip
+- Re-measured on resolution and scaling changes, display hotplug, and lid open or close
 - With an external display attached, the panel stays on the screen that has the notch
-- Machines without a notch degrade to a small panel centered at the top of the screen
+- Machines without a notch are supported; the panel is centered at the top of the screen
 
-## Troubleshooting
+Requires macOS 13 or later.
+
+## Debugging
 
 ```bash
-./build/NotchDash.app/Contents/MacOS/NotchDash --probe          # all data sources
-./build/NotchDash.app/Contents/MacOS/NotchDash --probe-oauth    # fallback channel only
-./build/NotchDash.app/Contents/MacOS/NotchDash --probe-menubar  # menu bar space
+NotchDash --probe           # print every data source with its state and failure reason
+NotchDash --probe-oauth     # test the API fallback only
+NotchDash --probe-menubar   # print menu bar free space and the layout decision
 ```
 
-The app also renders its own UI to a PNG — no screen recording permission needed:
+The UI can render itself to an image without screen recording permission:
 
 ```bash
-NOTCHDASH_DEMO=expanded ./build/NotchDash.app/Contents/MacOS/NotchDash --snapshot /tmp/a.png
+NOTCHDASH_DEMO=expanded NotchDash --snapshot /tmp/a.png
 ```
 
 Runtime state is written to `~/.notchdash/status.json`.
 
-## Notes on the implementation
+Running these from a terminal inherits the terminal's permissions, which may differ from those
+of the app launched by double-clicking.
 
-- Swift + SwiftUI + AppKit; an `NSPanel` above the menu bar level
-- **Deliberately avoids SwiftUI macros** (`@State` and friends): Command Line Tools ships no
-  `SwiftUIMacros` plugin, so using them would force everyone to install the full Xcode
-- The window stays at its maximum size and the content resizes inside it, so expanding and
-  collapsing never resizes the window — no animation jitter
+## Uninstall
+
+```bash
+./uninstall.sh
+```
+
+Stops the process, removes the launch agent and the app, and restores the statusline entry in
+`~/.claude/settings.json`. The config directory `~/.notchdash/` is kept.
+
+## Implementation notes
+
+Swift with SwiftUI and AppKit, using an `NSPanel` placed above the menu bar window level.
+
+SwiftUI macros (`@State` and similar) are deliberately avoided: Command Line Tools ships no
+`SwiftUIMacros` plugin, so using them would require a full Xcode installation to build.
+
+The window stays at its maximum size and the content controls the drawn area, so expanding and
+collapsing never resizes the window.
 
 ## License
 
