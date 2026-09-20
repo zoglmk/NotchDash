@@ -42,9 +42,12 @@ final class CodexUsageProvider: Sendable {
             return quota
         }
 
-        let files = recentSessionFiles()
+        // 换过账号的话，只认切换之后写入的会话日志——日志本身不记账号，
+        // 否则会一直拿旧账号的额度当成当前账号的。
+        let since = AccountTracker.shared.codexAccountSince()
+        let files = recentSessionFiles(since: since)
         guard !files.isEmpty else {
-            quota.error = "没有会话记录"
+            quota.error = since == nil ? "没有会话记录" : "账号刚切换，等待新会话"
             return quota
         }
 
@@ -70,7 +73,8 @@ final class CodexUsageProvider: Sendable {
     }
 
     /// 按最近修改时间列出会话文件
-    private func recentSessionFiles() -> [URL] {
+    /// - Parameter since: 只要这个时刻之后改动过的（账号切换分界），nil 表示不限
+    private func recentSessionFiles(since: Date?) -> [URL] {
         let fm = FileManager.default
         guard let e = fm.enumerator(at: sessionsRoot,
                                     includingPropertiesForKeys: [.contentModificationDateKey],
@@ -79,6 +83,7 @@ final class CodexUsageProvider: Sendable {
         for case let url as URL in e where url.pathExtension == "jsonl" {
             let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
                 .contentModificationDate ?? .distantPast
+            if let since, date < since { continue }
             files.append((url, date))
         }
         return files.sorted { $0.1 > $1.1 }.prefix(maxFilesToScan).map(\.0)

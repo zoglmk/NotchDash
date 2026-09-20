@@ -92,6 +92,11 @@ final class OAuthUsageProvider: @unchecked Sendable {
     // MARK: - Codex
 
     func fetchCodex() -> Quota? {
+        // 刚换过账号：缓存里是上一个账号的额度，作废并立刻重新请求
+        if AccountTracker.shared.consumeCodexSwitchFlag() {
+            lastCodexResult = nil
+            lastCodexFetch = nil
+        }
         guard shouldFetch(last: lastCodexFetch) else { return lastCodexResult }
         lastCodexFetch = Date()
 
