@@ -51,19 +51,41 @@ Only Command Line Tools required — **no full Xcode needed**:
 ```bash
 xcode-select --install     # if you have not already
 git clone <this repo>
-cd minitool
+cd NotchDash
 ./install.sh               # build and install to ~/Applications
 ./install.sh --autostart   # also register a launch agent
 ```
 
 ### Or grab a release build
 
-Releases are **not signed or notarized** (that needs a $99/year Apple Developer account).
-macOS will refuse to open it with a misleading "damaged" message. Clear the quarantine flag:
+Download the zip from [Releases](../../releases), unpack it and drag `NotchDash.app`
+into Applications.
+
+**The first launch will be blocked**, with a message claiming the app "is damaged and
+should be moved to the Trash". That message is misleading — nothing is damaged, the app
+simply is not signed or notarized (which requires a $99/year Apple Developer account).
+Either of these clears it:
+
+**Option 1: command line (fastest)**
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/NotchDash.app
 ```
+
+This only strips the quarantine flag macOS attaches to downloaded files. Double-click works
+afterwards.
+
+**Option 2: System Settings**
+
+1. Double-click `NotchDash.app`, dismiss the warning
+2. Open System Settings → Privacy & Security, scroll down
+3. Under "Security" you will see "NotchDash was blocked" — click **Open Anyway**
+4. Confirm once more
+
+> Right-clicking the icon and choosing Open **no longer works** on macOS 15 and later.
+
+Building from source with `./install.sh` avoids all of this — locally compiled binaries carry
+no quarantine flag.
 
 ### Feeding it Claude Code quota
 
@@ -100,9 +122,28 @@ that fits:
 | All on the left | Right side too tight, left side fits |
 | Below the notch | Neither fits — stays off the menu bar entirely, but covers ~21pt of window content |
 
-This needs **Accessibility** permission (System Settings → Privacy & Security → Accessibility).
-It asks once on first launch; decline and everything still works, you just pick the layout
-yourself from the `⋯` menu.
+#### Accessibility permission
+
+Reading status item coordinates goes through the accessibility API, so it needs permission:
+
+1. On first launch NotchDash asks once — click "Open System Settings"
+2. Or go to System Settings → Privacy & Security → Accessibility manually
+3. Find **NotchDash** in the list and switch it on
+4. No restart needed, it takes effect within 20 seconds
+
+**Declining is fine** — everything still works, you just pick the layout yourself from the
+`⋯` menu → "Collapsed layout".
+
+When you may need to re-authorize:
+
+- **After updating the app** — macOS identifies apps by signature, so replacing the `.app`
+  can invalidate the grant. The symptom is auto-layout silently stopping. Remove NotchDash
+  from the list (select it, press `−`) and add it again
+- **Two NotchDash entries in the list** — delete the stale one
+
+To check whether it currently has permission, look at `accessibility_authorized` in
+`~/.notchdash/status.json`, or see whether the menu shows "Auto" as
+"needs Accessibility permission".
 
 ## Configuration
 
