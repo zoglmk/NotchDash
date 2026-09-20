@@ -419,7 +419,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// 调试用：NOTCHDASH_FAKE="35,25" 把两个额度的**剩余**百分比写死，
+    /// 用来验收配色阈值，不用干等真实额度掉下来。
+    private func fakeQuotas() -> [Quota]? {
+        guard let raw = ProcessInfo.processInfo.environment["NOTCHDASH_FAKE"] else { return nil }
+        let parts = raw.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count == 2 else { return nil }
+        return [("claude", "Claude Code", "CC", parts[0]), ("codex", "Codex", "Codex", parts[1])]
+            .map { id, name, short, remaining in
+                Quota(id: id, name: name, short: short, plan: "demo",
+                      primary: UsageWindow(usedPercent: 100 - remaining, windowMinutes: 300,
+                                           resetsAt: Date().addingTimeInterval(3600)),
+                      secondary: nil, updatedAt: Date(), source: "假数据", error: nil)
+            }
+    }
+
     private func refreshQuotas() {
+        if let fake = fakeQuotas() {
+            model.quotas = fake
+            return
+        }
         let claude = claudeProvider, codex = codexProvider
         let oauth = oauthProvider, custom = customProvider
         let cfg = config
