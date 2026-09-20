@@ -187,7 +187,8 @@ struct NotchView: View {
     }
 
     /// 收起态的紧凑额度：只有「标签 + 数字」。
-    /// 刻意不放进度条——收起态空间紧张，数字本身带颜色已经说明问题了。
+    /// 这里没有进度条，所以状态全靠数字的颜色传达；
+    /// 但亮度保持恒定，不跟着数据新鲜度变——那会让人误以为在闪。
     @ViewBuilder private func miniQuota(_ q: Quota?) -> some View {
         if let q, let used = q.headlinePercent {
             HStack(spacing: 4) {
@@ -198,7 +199,7 @@ struct NotchView: View {
                 // 颜色始终按「已用」算（越用越红），数字按设置显示剩余或已用
                 Text("\(Int((model.showRemaining ? 100 - used : used).rounded()))%")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(usageColor(used))
                     .monospacedDigit()
                     .fixedSize()
             }
