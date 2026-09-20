@@ -27,6 +27,10 @@
 
 ## 安装
 
+### 下载发布版
+
+从 [Releases](https://github.com/zoglmk/NotchDash/releases) 下载 zip，解压后将 `NotchDash.app` 移入「应用程序」，双击打开。首次打开需要处理系统拦截，见下方常见问题。
+
 ### 从源码构建
 
 只需要 Command Line Tools，不必安装完整 Xcode。
@@ -39,13 +43,19 @@ cd NotchDash
 ./install.sh --autostart        # 同时注册开机自启
 ```
 
-### 下载发布版
+### 打开之后
 
-从 [Releases](https://github.com/zoglmk/NotchDash/releases) 下载 zip，解压后将 `NotchDash.app` 移入「应用程序」。首次打开需要处理系统拦截，见下方常见问题。
+不需要任何配置，额度、系统状态和股票指数会直接显示出来。
 
-### 接入 Claude Code 额度
+首次读取额度时，系统可能弹出钥匙串授权窗口，点「允许」即可。程序通过它读取 Claude Code 已有的登录态来查询额度，不会保存或转发（详见数据来源）。
 
-Claude Code 的额度数据通过状态栏（statusline）传递，需要在 `~/.claude/settings.json` 中指向本项目的转发脚本：
+其余选项都在右键菜单里，包括股票指数、轮播、排布方式和显示模式。
+
+### 可选：让 Claude Code 额度走本地通道
+
+默认情况下 Claude Code 的额度通过官方 API 查询，需要钥匙串授权并联网。如果希望完全不联网、也不读取凭据，可以改用 statusline 通道。
+
+Claude Code 会把额度数据放在状态栏（statusline）的输入里，在 `~/.claude/settings.json` 中指向本项目的转发脚本即可取到：
 
 ```json
 {
@@ -60,7 +70,18 @@ Claude Code 的额度数据通过状态栏（statusline）传递，需要在 `~/
 
 修改前请备份原有的 `command` 值。若改动由本项目脚本完成，`uninstall.sh` 可自动还原。
 
-Codex 的额度无需额外配置。
+两条通道的区别：
+
+| | statusline 通道 | API 通道 |
+|---|---|---|
+| 是否联网 | 否 | 是 |
+| 是否读取凭据 | 否 | 是，读取本机已有登录态 |
+| 数据新鲜度 | Claude Code 运行时实时更新 | 随时可查 |
+| 需要配置 | 是 | 否 |
+
+两者可以同时启用，此时优先使用 statusline 通道，数据过期后自动切换到 API。
+
+Codex 的额度直接从本地会话日志读取，无需任何配置。
 
 ## 常见问题
 
@@ -98,9 +119,13 @@ macOS 15 起，右键点击图标选择「打开」的方式已失效。从源�
 
 当前权限状态可查看 `~/.notchdash/status.json` 中的 `accessibility_authorized` 字段。
 
-### Claude Code 一直显示「等待刷新状态栏」
+### Claude Code 显示「等待刷新状态栏」
 
-statusline 未指向本项目的转发脚本，或当前会话尚未产生第一次模型响应。
+说明两条通道都没取到数据。逐项检查：
+
+- 若关闭了 `oauth_fallback`，则必须配置 statusline，见安装章节
+- 若开着 API 兜底，运行 `NotchDash --probe-oauth` 查看失败原因，通常是钥匙串授权被拒绝或登录态已过期，重新登录 Claude Code 即可
+- 若已配置 statusline，该提示也可能表示当前会话尚未产生第一次模型响应
 
 ### Codex 显示「已过期」
 
@@ -186,7 +211,7 @@ statusline 未指向本项目的转发脚本，或当前会话尚未产生第一
 
 ## 数据来源
 
-额度数据有两条通道，本地通道优先，失效或过期时才使用 API：
+额度数据有两条通道，本地通道优先，失效或过期时才使用 API。Claude Code 的本地通道需要配置 statusline（见安装），未配置时直接走 API：
 
 | 工具 | 本地通道 | API 兜底 |
 |---|---|---|

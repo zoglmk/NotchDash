@@ -32,6 +32,12 @@ it joins the notch's own black, making the notch appear larger.
 
 ## Installation
 
+### From releases
+
+Download the zip from [Releases](https://github.com/zoglmk/NotchDash/releases), unpack it,
+move `NotchDash.app` into Applications and open it. The first launch needs one extra step,
+see Troubleshooting.
+
 ### From source
 
 Only Command Line Tools is required. A full Xcode installation is not needed.
@@ -44,15 +50,22 @@ cd NotchDash
 ./install.sh --autostart        # also register a launch agent
 ```
 
-### From releases
+### After opening
 
-Download the zip from [Releases](https://github.com/zoglmk/NotchDash/releases), unpack it and
-move `NotchDash.app` into Applications. The first launch needs one extra step, see
-Troubleshooting below.
+No configuration is needed. Quota, system stats and market indices show up right away.
 
-### Connecting Claude Code quota
+The first quota read may bring up a Keychain authorization dialog; click Allow. The app uses
+it to read the login state Claude Code already stored, and neither saves nor forwards it
+(see Data sources).
 
-Claude Code exposes quota through its statusline payload. Point it at the relay script in
+Everything else lives in the right-click menu: indices, carousel, layout and display mode.
+
+### Optional: route Claude Code quota through the local channel
+
+By default Claude Code quota is fetched from the official API, which needs Keychain access and
+network. To avoid both, switch to the statusline channel.
+
+Claude Code puts quota data in its statusline payload. Point it at the relay script in
 `~/.claude/settings.json`:
 
 ```json
@@ -71,7 +84,19 @@ so your terminal statusline keeps working as before. It detects claude-hud autom
 Back up your existing `command` value first. If the change was made by the scripts in this
 project, `uninstall.sh` restores it automatically.
 
-Codex requires no additional setup.
+How the two channels compare:
+
+| | Statusline | API |
+|---|---|---|
+| Network | No | Yes |
+| Reads credentials | No | Yes, existing login state |
+| Freshness | Live while Claude Code runs | Always available |
+| Setup required | Yes | No |
+
+Both can be enabled at once. The statusline channel wins, and the API takes over once its data
+goes stale.
+
+Codex quota is read from local session logs and needs no configuration at all.
 
 ## Troubleshooting
 
@@ -115,10 +140,15 @@ with the `−` button and add it again. If two NotchDash entries appear, delete 
 
 The current state is recorded as `accessibility_authorized` in `~/.notchdash/status.json`.
 
-### Claude Code stays on "waiting for statusline"
+### Claude Code shows "waiting for statusline"
 
-The statusline is not pointing at the relay script, or the current session has not produced
-its first model response yet.
+Both channels failed to return data. Check in order:
+
+- With `oauth_fallback` disabled, the statusline must be configured; see Installation
+- With the API fallback enabled, run `NotchDash --probe-oauth` to see why it failed. Usually
+  Keychain access was denied or the login state expired; signing in to Claude Code again fixes it
+- With the statusline configured, the message can also mean the current session has not
+  produced its first model response yet
 
 ### Codex shows "stale"
 
@@ -215,7 +245,8 @@ Commands run as your user. Do not use configurations from untrusted sources.
 ## Data sources
 
 Quota data has two channels. The local one takes priority; the API is used only when local
-data is missing or stale:
+data is missing or stale. The Claude Code local channel requires statusline setup (see
+Installation); without it the API is used directly:
 
 | Tool | Local channel | API fallback |
 |---|---|---|
