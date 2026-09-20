@@ -294,18 +294,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var slowTimer: Timer?
     /// 串行队列：保证 SystemStatsProvider 的差分状态不会被并发访问
     private let collectQueue = DispatchQueue(label: "local.zgm.notchdash.collect", qos: .utility)
+    /// 菜单栏探测单独一条队列。全量扫描要一秒多，挤在上面那条队列里
+    /// 会把 CPU / 网速的采样一起堵住，差分间隔就不准了。
+    private let menuBarQueue = DispatchQueue(label: "local.zgm.notchdash.menubar", qos: .utility)
 
     private func startRefreshing() {
         refreshSystem()
         refreshQuotas()
         refreshMenuBarSpace()
 
-        // 切换 App 时菜单栏长度会变（不同 App 的菜单项数量不同），跟着重算
+        // 切换 App：只有菜单长度会变，图标没动，用缓存快查即可
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshMenuBarSpace() }
+            MainActor.assumeIsolated { self?.refreshMenuBarSpace(rescanExtras: false) }
+        }
+
+        // App 启动/退出：状态栏图标可能增减，必须重新全量扫描。
+        // 延迟一下再扫——图标是 App 起来之后才注册的，立刻扫会扫了个寂寞。
+        for name in [NSWorkspace.didLaunchApplicationNotification,
+                     NSWorkspace.didTerminateApplicationNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    MainActor.assumeIsolated { self?.refreshMenuBarSpace(rescanExtras: true) }
+                }
+            }
         }
         // 系统状态变化快，2 秒一次；CPU/网速本来就要靠两次采样求差
         fastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -316,7 +332,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 self?.config = Config.load()   // 改了配置文件不用重启
                 self?.refreshQuotas()
-                self?.refreshMenuBarSpace()    // 图标可能被添加/移除
+                // 兜底重扫。图标增减靠上面的 App 启停事件就够了，
+                // 这里只防漏网（比如 App 没退出但自己把图标撤了）。
+                // 注意括号：?? 的优先级比 % 低，不加括号会变成 tick == 0，永远不成立。
+                guard let self else { return }
+                self.menuBarTick += 1
+                if self.menuBarTick % 3 == 0 {
+                    self.refreshMenuBarSpace(rescanExtras: true)
+                }
             }
         }
     }
@@ -345,7 +368,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// 量一下菜单栏两侧还剩多少空间。走辅助功能接口，可能偏慢，放后台。
-    private func refreshMenuBarSpace() {
+    private var menuBarTick = 0
+
+    private func refreshMenuBarSpace(rescanExtras: Bool = true) {
         guard let geo = NotchGeometry() else { return }
         guard config.autoLayout, menuBarProbe.isAuthorized else {
             writeStatus(nil)      // 没授权也要留个记录，方便排查
@@ -355,8 +380,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let notchLeft = geo.screen.frame.midX - geo.notchWidth / 2
         let notchRight = geo.screen.frame.midX + geo.notchWidth / 2
         let frame = geo.screen.frame
-        collectQueue.async { [weak self] in
-            let space = probe.probe(notchLeft: notchLeft, notchRight: notchRight, screenFrame: frame)
+        menuBarQueue.async { [weak self] in
+            let space = probe.probe(notchLeft: notchLeft, notchRight: notchRight,
+                                    screenFrame: frame, rescanExtras: rescanExtras)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     guard let self else { return }

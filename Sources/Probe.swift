@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// 命令行自检：不启动界面，直接把当前采集到的数据打印出来。
 /// 用来确认数据链路是否通，以及排查「面板上数字不对」这类问题。
@@ -39,9 +40,28 @@ enum Probe {
         let l = geo.screen.frame.midX - geo.notchWidth / 2
         let r = geo.screen.frame.midX + geo.notchWidth / 2
         print(String(format: "刘海: %.1f ~ %.1f （宽 %.1f）", l, r, geo.notchWidth))
-        guard let s = probe.probe(notchLeft: l, notchRight: r, screenFrame: geo.screen.frame) else {
-            print("探测失败"); return
+        let appCount = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy != .prohibited }.count
+        print("需要遍历的 App: \(appCount) 个")
+
+        // 全量扫描（要挨个问每个 App 要状态栏图标）
+        let t0 = CFAbsoluteTimeGetCurrent()
+        let result = probe.probe(notchLeft: l, notchRight: r,
+                                 screenFrame: geo.screen.frame, rescanExtras: true)
+        let fullMs = (CFAbsoluteTimeGetCurrent() - t0) * 1000
+
+        // 命中缓存（只重查前台 App 的菜单宽度）
+        var cachedTimes: [Double] = []
+        for _ in 0..<5 {
+            let t = CFAbsoluteTimeGetCurrent()
+            _ = probe.probe(notchLeft: l, notchRight: r,
+                            screenFrame: geo.screen.frame, rescanExtras: false)
+            cachedTimes.append((CFAbsoluteTimeGetCurrent() - t) * 1000)
         }
+        print(String(format: "全量扫描 %.1f ms   缓存命中 %.1f ms（平均，快 %.0f 倍）",
+                     fullMs, cachedTimes.reduce(0,+) / 5,
+                     fullMs / max(cachedTimes.reduce(0,+) / 5, 0.01)))
+        guard let s = result else { print("探测失败"); return }
         print(String(format: "左侧可用 %.1f 点    右侧可用 %.1f 点", s.left, s.right))
         print()
         let need单 = 52.0 + 8 + 10 + 7

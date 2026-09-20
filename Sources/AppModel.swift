@@ -32,11 +32,11 @@ final class AppModel: ObservableObject {
     func quota(_ id: String) -> Quota? { quotas.first { $0.id == id } }
 }
 
-/// 百分比 → 颜色：越接近用满越红
+/// 进度条渐变用的色标。数字一律常亮白色，颜色只用在进度条上。
 ///
 /// 红色为什么调得偏粉：人眼对绿光最敏感、对红光最不敏感，同样饱和度下
-/// 纯红在黑底上的感知亮度只有绿色的三分之二左右，看着发暗。
-/// 提高红色的绿蓝分量把感知亮度拉回到和其他几档相当的水平。
+/// 纯红在深色底上的感知亮度只有绿色的三分之二左右，看着发暗。
+/// 提高红色的绿蓝分量，把感知亮度拉回到和其他几档相当的水平。
 func usageColor(_ pct: Double) -> Color {
     switch pct {
     case ..<50:  return Color(red: 0.30, green: 0.85, blue: 0.45)   // 感知亮度 ≈180
@@ -46,7 +46,15 @@ func usageColor(_ pct: Double) -> Color {
     }
 }
 
-/// 用满时把字加粗，光靠颜色不够抓眼
-func usageWeight(_ pct: Double) -> Font.Weight {
-    pct >= 95 ? .bold : .semibold
-}
+/// 进度条渐变的色标，按「剩余比例」标定：0 = 见底，1 = 满格。
+///
+/// 位置刻意不均匀：均匀分布会让「剩余 60%」显示成橙色，可剩下六成明明还很健康。
+/// 把红橙黄压到前 45% 区间，之后一路绿到底，跟人对余量的直觉一致。
+let usageRampStops: [(color: Color, at: Double)] = [
+    (Color(red: 1.00, green: 0.49, blue: 0.46), 0.00),   // 见底：红
+    (Color(red: 0.99, green: 0.55, blue: 0.22), 0.12),   // 橙
+    (Color(red: 0.98, green: 0.78, blue: 0.25), 0.26),   // 黄
+    (Color(red: 0.30, green: 0.85, blue: 0.45), 0.46),   // 绿
+    (Color(red: 0.30, green: 0.85, blue: 0.45), 1.00),   // 一路绿到满
+]
+

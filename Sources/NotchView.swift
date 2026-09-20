@@ -197,8 +197,8 @@ struct NotchView: View {
                     .fixedSize()
                 // 颜色始终按「已用」算（越用越红），数字按设置显示剩余或已用
                 Text("\(Int((model.showRemaining ? 100 - used : used).rounded()))%")
-                    .font(.system(size: 11, weight: usageWeight(used), design: .rounded))
-                    .foregroundStyle(usageColor(used).opacity(q.isStale ? 0.45 : 1))
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
                     .monospacedDigit()
                     .fixedSize()
             }
@@ -248,6 +248,16 @@ struct NotchView: View {
         }
     }
 
+    /// 进度条的渐变。色标按「剩余」语义标定，已用模式下整条左右翻转：
+    /// 剩余模式填得越多越安全（左危险→右安全），已用模式填得越多越危险。
+    private var barGradient: LinearGradient {
+        let stops: [Gradient.Stop] = model.showRemaining
+            ? usageRampStops.map { .init(color: $0.color, location: $0.at) }
+            : usageRampStops.reversed().map { .init(color: $0.color, location: 1 - $0.at) }
+        return LinearGradient(gradient: Gradient(stops: stops),
+                              startPoint: .leading, endPoint: .trailing)
+    }
+
     /// 按设置换算成要显示的数值：剩余 或 已用
     private func shown(_ w: UsageWindow) -> Double {
         model.showRemaining ? 100 - w.usedPercent : w.usedPercent
@@ -260,19 +270,27 @@ struct NotchView: View {
                     .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.3))
                     .fixedSize()
-                Capsule()
-                    .fill(w.usedPercent >= 99.5
-                          ? usageColor(100).opacity(0.32)   // 用满了：空条会被误认成没数据
-                          : .white.opacity(0.13))
-                    .frame(width: wide ? 96 : 62, height: 5)
-                    .overlay(alignment: .leading) {
-                        Capsule()
-                            .fill(usageColor(w.usedPercent))
-                            .frame(width: (wide ? 96 : 62) * min(shown(w), 100) / 100, height: 5)
-                    }
+                let full = wide ? 96.0 : 62.0
+                let fill = full * min(max(shown(w), 0), 100) / 100
+                ZStack(alignment: .leading) {
+                    // 轨道。额度耗尽时给点暗红底，否则空条看着像没数据
+                    Capsule()
+                        .fill(w.usedPercent >= 99.5
+                              ? usageColor(100).opacity(0.30)
+                              : .white.opacity(0.13))
+                    // 渐变按完整长度铺开，再遮罩出填充部分，
+                    // 这样填到哪儿就露出哪一段颜色，而不是把整条渐变压缩进填充段
+                    Rectangle()
+                        .fill(barGradient)
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: fill)
+                        }
+                }
+                .frame(width: full, height: 5)
+
                 Text("\(Int(shown(w).rounded()))%")
-                    .font(.system(size: 10, weight: usageWeight(w.usedPercent), design: .rounded))
-                    .foregroundStyle(usageColor(w.usedPercent))
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
                     .monospacedDigit()
                     .frame(width: 32, alignment: .leading)
             }

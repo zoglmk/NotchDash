@@ -12,15 +12,19 @@ final class OAuthUsageProvider: @unchecked Sendable {
     private let minInterval: TimeInterval = 300
     private var lastClaudeFetch: Date?
     private var lastCodexFetch: Date?
+    /// 上一次成功拿到的结果。限流期间要把它交回去，不能返回 nil——
+    /// 否则调用方会退回那份早就过期的本地数据，界面就会以限流周期明暗交替。
+    private var lastClaudeResult: Quota?
+    private var lastCodexResult: Quota?
     private let timeout: TimeInterval = 8
 
     // MARK: - Claude
 
     func fetchClaude() -> Quota? {
-        guard shouldFetch(last: lastClaudeFetch) else { return nil }
+        guard shouldFetch(last: lastClaudeFetch) else { return lastClaudeResult }
         lastClaudeFetch = Date()
 
-        guard let token = claudeAccessToken() else { return nil }
+        guard let token = claudeAccessToken() else { return lastClaudeResult }
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
@@ -28,7 +32,7 @@ final class OAuthUsageProvider: @unchecked Sendable {
 
         guard let data = send(req),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return nil }
+        else { return lastClaudeResult }
 
         var q = Quota(id: "claude", name: "Claude Code", short: "CC", plan: nil,
                       primary: nil, secondary: nil, updatedAt: Date(),
@@ -36,7 +40,9 @@ final class OAuthUsageProvider: @unchecked Sendable {
         // 注意：这个端点用的是 utilization，跟 statusline 的 used_percentage 不是同一个字段名
         q.primary = oauthWindow(obj["five_hour"], minutes: 300)
         q.secondary = oauthWindow(obj["seven_day"], minutes: 10080)
-        return (q.primary == nil && q.secondary == nil) ? nil : q
+        guard q.primary != nil || q.secondary != nil else { return lastClaudeResult }
+        lastClaudeResult = q
+        return q
     }
 
     private func oauthWindow(_ raw: Any?, minutes: Int) -> UsageWindow? {
@@ -86,7 +92,7 @@ final class OAuthUsageProvider: @unchecked Sendable {
     // MARK: - Codex
 
     func fetchCodex() -> Quota? {
-        guard shouldFetch(last: lastCodexFetch) else { return nil }
+        guard shouldFetch(last: lastCodexFetch) else { return lastCodexResult }
         lastCodexFetch = Date()
 
         let authURL = FileManager.default.homeDirectoryForCurrentUser
@@ -95,7 +101,7 @@ final class OAuthUsageProvider: @unchecked Sendable {
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tokens = obj["tokens"] as? [String: Any],
               let token = tokens["accessToken"] as? String ?? tokens["access_token"] as? String
-        else { return nil }
+        else { return lastCodexResult }
         let account = (tokens["accountId"] as? String) ?? (tokens["account_id"] as? String) ?? ""
 
         var req = URLRequest(url: URL(string: "https://chatgpt.com/backend-api/wham/usage")!)
@@ -106,7 +112,7 @@ final class OAuthUsageProvider: @unchecked Sendable {
         guard let body = send(req),
               let r = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
               let rl = r["rate_limit"] as? [String: Any]
-        else { return nil }
+        else { return lastCodexResult }
 
         var q = Quota(id: "codex", name: "Codex", short: "Codex",
                       plan: r["plan_type"] as? String,
@@ -114,7 +120,9 @@ final class OAuthUsageProvider: @unchecked Sendable {
                       source: "官方 API", error: nil)
         q.primary = whamWindow(rl["primary_window"])
         q.secondary = whamWindow(rl["secondary_window"])
-        return (q.primary == nil && q.secondary == nil) ? nil : q
+        guard q.primary != nil || q.secondary != nil else { return lastCodexResult }
+        lastCodexResult = q
+        return q
     }
 
     private func whamWindow(_ raw: Any?) -> UsageWindow? {

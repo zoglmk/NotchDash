@@ -18,16 +18,31 @@ final class MenuBarProbe: @unchecked Sendable {
 
     /// 和图标之间至少留这么多，别贴着
     private let gap: CGFloat = 6
+    /// 单个 AX 调用的超时。AX 是同步 IPC，碰上正忙的 App 会一直等下去——
+    /// 实测不加限制时单次全量探测能飙到 1.1 秒以上。
+    private let axTimeout: Float = 0.12
+
+    /// 状态栏图标的位置缓存。遍历所有 App 很贵，只在 App 启停时才重扫。
+    private var cachedExtras: [CGRect] = []
+    private var hasScanned = false
 
     var isAuthorized: Bool { AXIsProcessTrusted() }
 
-    func probe(notchLeft: CGFloat, notchRight: CGFloat, screenFrame: CGRect) -> Space? {
+    /// - Parameter rescanExtras: true 重新遍历所有 App 找状态栏图标（慢，约 20~200ms）；
+    ///   false 沿用缓存，只重查前台 App 的菜单宽度（快，一次 AX 调用）
+    func probe(notchLeft: CGFloat, notchRight: CGFloat, screenFrame: CGRect,
+               rescanExtras: Bool = true) -> Space? {
         guard AXIsProcessTrusted() else { return nil }
+
+        if rescanExtras || !hasScanned {
+            cachedExtras = extrasFrames(in: screenFrame)
+            hasScanned = true
+        }
 
         var leftOccupiedTo: CGFloat = screenFrame.minX
         var rightStartsAt: CGFloat = screenFrame.maxX
 
-        for f in extrasFrames(in: screenFrame) {
+        for f in cachedExtras {
             if f.minX >= notchRight {
                 // 刘海右侧那排
                 rightStartsAt = min(rightStartsAt, f.minX)
@@ -46,16 +61,28 @@ final class MenuBarProbe: @unchecked Sendable {
 
     // MARK: - 状态栏图标
 
+    /// 遍历所有 App 找状态栏图标。
+    /// 每个 App 都是一次同步 IPC（约 16ms），串行跑 66 个 App 要一秒多，
+    /// 所以这里并发发问——反正绝大部分时间都耗在等对方回话上。
     private func extrasFrames(in screenFrame: CGRect) -> [CGRect] {
+        let apps = NSWorkspace.shared.runningApplications
+            .filter { $0.activationPolicy != .prohibited }
+        guard !apps.isEmpty else { return [] }
+
+        let lock = NSLock()
         var out: [CGRect] = []
-        for app in NSWorkspace.shared.runningApplications {
-            guard app.activationPolicy != .prohibited else { continue }
-            let ax = AXUIElementCreateApplication(app.processIdentifier)
+        DispatchQueue.concurrentPerform(iterations: apps.count) { i in
+            let ax = AXUIElementCreateApplication(apps[i].processIdentifier)
+            AXUIElementSetMessagingTimeout(ax, axTimeout)
             var extrasRef: CFTypeRef?
             guard AXUIElementCopyAttributeValue(ax, "AXExtrasMenuBar" as CFString, &extrasRef) == .success,
                   let extras = extrasRef, CFGetTypeID(extras) == AXUIElementGetTypeID()
-            else { continue }
-            out.append(contentsOf: childFrames(of: extras as! AXUIElement, in: screenFrame))
+            else { return }
+            let frames = childFrames(of: extras as! AXUIElement, in: screenFrame)
+            guard !frames.isEmpty else { return }
+            lock.lock()
+            out.append(contentsOf: frames)
+            lock.unlock()
         }
         return out
     }
@@ -65,6 +92,7 @@ final class MenuBarProbe: @unchecked Sendable {
     private func appMenuRightEdge(in screenFrame: CGRect) -> CGFloat {
         guard let front = NSWorkspace.shared.frontmostApplication else { return screenFrame.minX }
         let ax = AXUIElementCreateApplication(front.processIdentifier)
+        AXUIElementSetMessagingTimeout(ax, axTimeout)
         var barRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(ax, kAXMenuBarAttribute as CFString, &barRef) == .success,
               let bar = barRef, CFGetTypeID(bar) == AXUIElementGetTypeID()
