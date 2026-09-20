@@ -196,8 +196,8 @@ struct NotchView: View {
                     .font(.system(size: 9, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(q.isStale ? 0.3 : 0.5))
                     .fixedSize()
-                // 颜色始终按「已用」算（越用越红），数字按设置显示剩余或已用
-                Text("\(Int((model.showRemaining ? 100 - used : used).rounded()))%")
+                // 用完了就显示倒计时，否则显示百分比
+                Text(q.headlineText ?? "\(Int((model.showRemaining ? 100 - used : used).rounded()))%")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(usageColor(used))
                     .monospacedDigit()

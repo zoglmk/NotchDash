@@ -13,6 +13,19 @@ struct UsageWindow: Equatable {
         return "\(windowMinutes)m"
     }
 
+    /// 收起态用的紧凑倒计时，如 "23分" / "2小时" / "5天"。
+    /// 那里只有一个数字的位置，放不下 "2小时30分" 这种完整写法。
+    var compactResetText: String? {
+        guard let resetsAt else { return nil }
+        let s = resetsAt.timeIntervalSinceNow
+        guard s > 0 else { return "即将" }
+        let days = Int(s) / 86400
+        if days > 0 { return "\(days)天" }
+        let hours = Int(s) / 3600
+        if hours > 0 { return "\(hours)小时" }
+        return "\(max(Int(s) / 60, 1))分"
+    }
+
     /// 距离重置还有多久，如 "2h30m"
     var resetText: String? {
         guard let resetsAt else { return nil }
@@ -40,6 +53,13 @@ struct Quota: Equatable, Identifiable {
     /// 收起态只显示一个最该关心的数字：优先短窗口，没有就用长窗口
     var headlinePercent: Double? {
         primary?.usedPercent ?? secondary?.usedPercent
+    }
+
+    /// 额度见底时，收起态改显示重置倒计时——都用完了，再看"0%"没有意义，
+    /// 这时候真正要知道的是什么时候能接着用。
+    var headlineText: String? {
+        guard let used = headlinePercent, used >= 99.5 else { return nil }
+        return (primary ?? secondary)?.compactResetText
     }
 
     /// 数据是否已经过期（超过 15 分钟没更新就标灰）
