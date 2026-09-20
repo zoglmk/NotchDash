@@ -24,6 +24,8 @@ final class AppModel: ObservableObject {
     @Published var collapsedLayout: String = "split"
     /// 是否自动挑排布
     @Published var autoLayout: Bool = true
+    /// 涨跌配色：true = 红涨绿跌
+    @Published var redUp: Bool = true
     /// 菜单栏两侧的剩余空间，nil 表示没有辅助功能权限、测不出来
     @Published var menuBarSpace: MenuBarProbe.Space?
     /// 点界面上那个按钮时弹菜单，由 AppDelegate 注入
@@ -40,6 +42,15 @@ final class AppModel: ObservableObject {
 /// 红色为什么调得偏粉：人眼对绿光最敏感、对红光最不敏感，同样饱和度下
 /// 纯红在深色底上的感知亮度只有绿色的三分之二左右，看着发暗。
 /// 提高红色的绿蓝分量，把感知亮度拉回到和绿色相当的水平。
+/// 从自定义数据源的输出里认出涨跌幅，如「3912 +0.94%」里的 +0.94。
+/// 认不出（没有带符号的百分比）就返回 nil，按普通文本显示。
+func changeValue(in text: String) -> Double? {
+    guard let r = text.range(of: #"[+-][0-9]+(\.[0-9]+)?%"#, options: .regularExpression) else {
+        return nil
+    }
+    return Double(text[r].dropLast())
+}
+
 func usageColor(_ used: Double) -> Color {
     remainingRatio(used) >= usageSafeThreshold ? usageSafeColor : usageDangerColor
 }

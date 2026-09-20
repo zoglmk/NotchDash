@@ -59,7 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"),
            i + 1 < CommandLine.arguments.count {
             let path = CommandLine.arguments[i + 1]
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            // 自定义数据源要跑 shell 命令（可能带网络请求），给够时间再截
+            let delay = ProcessInfo.processInfo.environment["NOTCHDASH_SNAPSHOT_DELAY"]
+                .flatMap(Double.init) ?? 2.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 self?.writeSnapshot(to: path)
                 NSApp.terminate(nil)
             }
@@ -120,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.showRemaining = config.showRemaining
         model.collapsedLayout = config.collapsedLayout
         model.autoLayout = config.autoLayout
+        model.redUp = config.redUp
         model.onShowMenu = { [weak self] in self?.showMenuAtMouse() }
 
         if let win = window {
@@ -464,6 +468,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.model.showRemaining = cfg.showRemaining
                     self?.model.collapsedLayout = cfg.collapsedLayout
                     self?.model.autoLayout = cfg.autoLayout
+                    self?.model.redUp = cfg.redUp
                 }
             }
         }

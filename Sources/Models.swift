@@ -51,14 +51,29 @@ struct Quota: Equatable, Identifiable {
     var source: String        // 数据来自哪条通道，用于排查问题
     var error: String?        // 取数失败时的原因
 
-    /// 收起态只有一个数字的位置，显示**用得最狠的那个窗口**。
+    /// 收起态只有一个数字的位置，显示当下最该关心的那个窗口。
     ///
     /// 不能固定取 primary：各家套餐的窗口配置不一样，primary 的含义也跟着变
-    /// （见过 Codex 的 primary 直接是 7 天窗口、secondary 为空的情况）。
-    /// 而且就算两个窗口都在，真正卡住人的也未必是短的那个——
-    /// 5 小时还剩八成、周额度只剩 3% 时，显示 5 小时就是误导。
+    /// （见过 Codex 的 primary 直接是 7 天窗口、secondary 为空的情况），
+    /// 所以按 windowMinutes 区分长短，而不是按字段名。
+    ///
+    /// 也不能简单取「已用比例最高」的那个：窗口长度不同，百分比没有可比性。
+    /// 周额度用掉 46% 在一周里是正常进度，可 5 小时窗口一重置，它就会被顶下去，
+    /// 于是面板显示的是一个根本不紧张的数字，反而看不到即时约束。
+    ///
+    /// 规则：默认看短窗口（它决定此刻能不能干活）；短窗口见底、或长窗口
+    /// 真的进了危险区，才让位给更要紧的那个。
     var headlineWindow: UsageWindow? {
-        [primary, secondary].compactMap { $0 }.max { $0.usedPercent < $1.usedPercent }
+        let windows = [primary, secondary].compactMap { $0 }
+        guard windows.count > 1 else { return windows.first }
+        let short = windows.min { $0.windowMinutes < $1.windowMinutes }
+        let long = windows.max { $0.windowMinutes < $1.windowMinutes }
+
+        // 短窗口已经见底：此刻就用不了，这才是最要紧的
+        if let short, short.usedPercent >= 99.5 { return short }
+        // 长窗口进了危险区（剩余不足三成）：比短窗口更值得警惕
+        if let long, long.usedPercent > 70 { return long }
+        return short ?? long
     }
 
     var headlinePercent: Double? { headlineWindow?.usedPercent }

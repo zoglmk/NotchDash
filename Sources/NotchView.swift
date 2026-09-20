@@ -317,9 +317,16 @@ struct NotchView: View {
     private var customRow: some View {
         measuredRow {
             ForEach(model.custom.sorted(by: { $0.key < $1.key }).prefix(4), id: \.key) { k, v in
-                stat(k, v)
+                stat(k, v, color: changeColor(v))
             }
         }
+    }
+
+    /// 输出里带涨跌幅就按涨跌上色，平盘和普通文本保持原样
+    private func changeColor(_ value: String) -> Color? {
+        guard let v = changeValue(in: value), v != 0 else { return nil }
+        let rising = v > 0
+        return (rising == model.redUp) ? usageDangerColor : usageSafeColor
     }
 
     /// 一行内容：取自然宽度、上报给面板决定该多宽，然后左对齐。
@@ -337,12 +344,12 @@ struct NotchView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func stat(_ label: String, _ value: String) -> some View {
+    private func stat(_ label: String, _ value: String, color: Color? = nil) -> some View {
         HStack(spacing: 4) {
             Text(label).font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.38))
             Text(value)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.88))
+                .foregroundStyle(color ?? .white.opacity(0.88))
                 .monospacedDigit()
         }
     }
