@@ -143,9 +143,8 @@ macOS 15 起，右键点击图标选择「打开」的方式已失效。从源�
 
 | 排布 | 选用条件 |
 |---|---|
-| 刘海左右分开 | 两侧空间都够 |
-| 全部靠左 | 右侧不够，左侧够 |
-| 刘海正下方 | 两侧都不够。不占用菜单栏，但会遮住窗口顶部约 21pt |
+| 全部靠左 | 左侧空间够 |
+| 刘海正下方 | 左侧不够。不占用菜单栏，但会遮住窗口顶部约 21pt |
 
 也可在菜单中手动指定。
 
@@ -165,7 +164,7 @@ macOS 15 起，右键点击图标选择「打开」的方式已失效。从源�
   "carousel_interval": 10,
   "red_up": true,
   "auto_layout": true,
-  "collapsed_layout": "split",
+  "collapsed_layout": "left",
   "stocks": {
     "interval": 60,
     "items": [
@@ -186,7 +185,7 @@ macOS 15 起，右键点击图标选择「打开」的方式已失效。从源�
 | `carousel` / `carousel_interval` | 轮播开关与间隔，单位秒，最小 2 |
 | `red_up` | `true` 为红涨绿跌，`false` 为绿涨红跌。对行情和自定义数据源同时生效 |
 | `auto_layout` | 是否根据菜单栏占用自动选择排布，需要辅助功能权限 |
-| `collapsed_layout` | 关闭自动排布时使用的方式：`split` / `left` / `below` |
+| `collapsed_layout` | 关闭自动排布时使用的方式：`left` / `below` |
 
 无论显示剩余还是已用，颜色始终按已用比例计算，剩余低于 30% 转为红色。
 

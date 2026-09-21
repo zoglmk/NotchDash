@@ -163,9 +163,8 @@ permission granted, the app measures the free space on each side and picks a lay
 
 | Layout | Used when |
 |---|---|
-| Split across the notch | Both sides have room |
-| All on the left | Right side too tight, left side fits |
-| Below the notch | Neither fits. Stays off the menu bar but covers about 21pt of window content |
+| All on the left | The left side has room |
+| Below the notch | The left side is too tight. Stays off the menu bar but covers about 21pt of window content |
 
 It can also be set manually from the menu.
 
@@ -188,7 +187,7 @@ within 20 seconds.
   "carousel_interval": 10,
   "red_up": false,
   "auto_layout": true,
-  "collapsed_layout": "split",
+  "collapsed_layout": "left",
   "stocks": {
     "interval": 60,
     "items": [
@@ -209,7 +208,7 @@ within 20 seconds.
 | `carousel` / `carousel_interval` | Carousel switch and interval in seconds, minimum 2 |
 | `red_up` | `true` colors gains red (Chinese convention), `false` colors gains green. Applies to both indices and custom sources |
 | `auto_layout` | Whether to pick the layout from measured menu bar usage. Requires Accessibility permission |
-| `collapsed_layout` | Layout used when auto-layout is off: `split`, `left` or `below` |
+| `collapsed_layout` | Layout used when auto-layout is off: `left` or `below` |
 
 Regardless of display mode, colors are always computed from the used percentage. Anything
 below 30% remaining turns red.

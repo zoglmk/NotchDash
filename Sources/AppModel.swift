@@ -45,15 +45,6 @@ final class AppModel: ObservableObject {
     @Published var custom: [DisplayItem] = []
     /// 收起态单侧内容的实测宽度。放在这里而不是用 @State，是因为 @State 在
     /// Swift 6 里是宏，Command Line Tools 不带 SwiftUIMacros 插件，会编译不过。
-    /// 左右两侧内容各自的实测宽度。必须分开存：两边内容宽度不同，
-    /// 强行等宽会让窄的那侧在外缘多出一块黑边，肉眼很容易看出来。
-    @Published var leftSlotWidths: [Int: CGFloat] = [:]
-    @Published var rightSlotWidths: [Int: CGFloat] = [:]
-    /// 同上，只认额度页的宽度
-    var leftSlotWidth: CGFloat { leftSlotWidths[0] ?? 52 }
-    var rightSlotWidth: CGFloat { rightSlotWidths[0] ?? 52 }
-    /// 靠左模式下「两个额度并排」的实测宽度。必须和上面两个分开存：
-    /// 那两个记的是单个额度的宽度，拿来当并排宽度用会把内容裁掉。
     /// 各页内容的实测宽度（键是页码）。
     ///
     /// 面板宽度取各页最大值，不跟着当前页走：轮播时黑条必须纹丝不动，
@@ -81,8 +72,8 @@ final class AppModel: ObservableObject {
     @Published var statsRowWidth: CGFloat = 0
     /// 是否显示剩余额度（而不是已用）
     @Published var showRemaining: Bool = true
-    /// 收起态排布："split" 左右分开 / "left" 全部靠左 / "below" 刘海正下方
-    @Published var collapsedLayout: String = "split"
+    /// 收起态排布："left" 全部靠左 / "below" 刘海正下方
+    @Published var collapsedLayout: String = "left"
     /// 是否自动挑排布
     @Published var autoLayout: Bool = true
     /// 涨跌配色：true = 红涨绿跌
@@ -282,8 +273,6 @@ final class AppModel: ObservableObject {
             d = d.filter { (0..<count).contains($0.key) }
         }
         prune(&combinedWidths)
-        prune(&leftSlotWidths)
-        prune(&rightSlotWidths)
     }
 }
 

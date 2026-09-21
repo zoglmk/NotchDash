@@ -28,10 +28,9 @@ struct Config: Decodable {
     /// false = 显示已用额度
     var showRemaining: Bool = true
     /// 收起态的排布方式：
-    /// "split" = 刘海左右各放一个（默认，对称好看）
-    /// "left"  = 两个都放左边，面板不向刘海右侧伸出
+    /// "left"  = 内容都放左边，面板不向刘海右侧伸出（默认）
     /// "below" = 收到刘海正下方，完全不占菜单栏
-    var collapsedLayout: String = "split"
+    var collapsedLayout: String = "left"
     /// 是否根据菜单栏实际占用自动挑排布（需要辅助功能权限）
     var autoLayout: Bool = true
     /// 是否已经弹过辅助功能授权请求。只弹一次，别反复打扰
@@ -61,7 +60,10 @@ struct Config: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         oauthFallback = try c.decodeIfPresent(Bool.self, forKey: .oauthFallback) ?? true
         showRemaining = try c.decodeIfPresent(Bool.self, forKey: .showRemaining) ?? true
-        collapsedLayout = try c.decodeIfPresent(String.self, forKey: .collapsedLayout) ?? "split"
+        collapsedLayout = try c.decodeIfPresent(String.self, forKey: .collapsedLayout) ?? "left"
+        // 「刘海左右分开」那种排布已经去掉，旧配置里写着 split 的按靠左处理，
+        // 不然会落到一个不存在的分支上
+        if collapsedLayout == "split" { collapsedLayout = "left" }
         autoLayout = try c.decodeIfPresent(Bool.self, forKey: .autoLayout) ?? true
         accessibilityPromptShown = try c.decodeIfPresent(Bool.self, forKey: .accessibilityPromptShown) ?? false
         redUp = try c.decodeIfPresent(Bool.self, forKey: .redUp) ?? true

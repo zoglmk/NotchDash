@@ -23,6 +23,10 @@ struct NotchView: View {
     private let edgeInset: CGFloat = 7
 
     private var isExpanded: Bool { model.isExpanded }
+    /// 面板形状。背景、裁剪、命中区域共用同一个，免得三处参数写岔
+    private var shape: NotchShape {
+        NotchShape(topRadius: topRadius, bottomRadius: isExpanded ? 20 : 12)
+    }
     /// 单侧翼宽 = 该侧内容实测宽度 + 与刘海的留白 + 反向圆角 + 外缘留白
     ///
     /// 注意这里不能写成 max(content, minSlotContent)：那样会把两侧一起抬到同一个
@@ -32,22 +36,21 @@ struct NotchView: View {
         (content > 0 ? content : minSlotContent) + gutter + topRadius + edgeInset
     }
     /// 实际生效的排布。开了自动就按菜单栏实测空间挑，否则用手动设置的。
+    ///
+    /// 只有两种：内容全部靠左，或者收到刘海正下方。原先还有一种「左右分开」，
+    /// 两侧各放一个，轮播时行情会被塞进本来只放一个额度的槽里，宽度对不上、
+    /// 显示也乱，已经去掉。
     private var layout: String {
         guard model.autoLayout, let space = model.menuBarSpace else { return model.collapsedLayout }
-        // 左右分开：右侧要放得下右翼，左侧要放得下左翼
-        if space.right >= wingWidth(model.rightSlotWidth),
-           space.left >= wingWidth(model.leftSlotWidth) { return "split" }
-        // 全部靠左：左侧要放得下两个额度并排
-        if space.left >= wingWidth(model.combinedWidth) { return "left" }
-        // 两侧都挤不下，只能收到刘海正下方
-        return "below"
+        return space.left >= wingWidth(model.combinedWidth) ? "left" : "below"
     }
     /// 靠左模式下两个额度之间的间距。用 ChipMetrics 里那份，
     /// 宽度预算算的是同一个数，写两遍迟早对不上
     private var bothSpacing: CGFloat { ChipMetrics.itemSpacing }
 
-    /// 全部靠左模式：右侧不伸出，避免压住菜单栏右边那排图标
-    private var leftOnly: Bool { !isExpanded && layout == "left" }
+    /// 全部靠左模式：右侧不伸出，避免压住菜单栏右边那排图标。
+    /// 收起态只剩靠左和正下方两种，所以不是正下方就是靠左
+    private var leftOnly: Bool { !isExpanded && layout != "below" }
     /// 刘海正下方模式：面板不超出刘海宽度，完全不占菜单栏那一行。
     /// 菜单栏图标排满右侧后会跳过刘海继续往左排，所以只有这个模式是绝对不会撞车的。
     private var belowMode: Bool { !isExpanded && layout == "below" }
@@ -57,13 +60,13 @@ struct NotchView: View {
     /// 展开态左右对称；收起态各自贴合内容，避免窄的一侧多出黑边
     private var leftWing: CGFloat {
         if isExpanded { return (expandedWidth - geo.notchWidth) / 2 }
-        // 靠左模式下左槽装的是两个额度并排，宽度来源不同
-        return wingWidth(leftOnly ? model.combinedWidth : model.leftSlotWidth)
+        // 收起态左槽装的是并排的那几项
+        return wingWidth(model.combinedWidth)
     }
     private var rightWing: CGFloat {
         if isExpanded { return (expandedWidth - geo.notchWidth) / 2 }
-        // 靠左模式下右侧只留反向圆角的宽度，黑色主体正好收在刘海右边缘
-        return leftOnly ? topRadius : wingWidth(model.rightSlotWidth)
+        // 收起态右侧只留反向圆角的宽度，黑色主体正好收在刘海右边缘
+        return topRadius
     }
     private var width: CGFloat {
         // 宽度取刘海宽 + 两个反向圆角，这样黑色主体正好和刘海等宽、边缘对齐
@@ -87,12 +90,12 @@ struct NotchView: View {
             }
         }
         .frame(width: width)
-        .background(
-            NotchShape(topRadius: topRadius, bottomRadius: isExpanded ? 20 : 12)
-                .fill(Color.black)
-        )
+        .background(shape.fill(Color.black))
+        // 裁到黑色形状以内。轮播的翻页动画是从下方移入的，不裁的话文字会先出现在
+        // 黑条外面的桌面上再滑进来，正下方模式尤其明显（那一行贴着面板底边）
+        .clipShape(shape)
         // 只有黑色面板区域接收鼠标，其余透明区域事件穿透到下层窗口
-        .contentShape(NotchShape(topRadius: topRadius, bottomRadius: isExpanded ? 20 : 12))
+        .contentShape(shape)
         // 展开态底部两行的宽度必须在这里接。它们在 detailBody 里，和 topRow 是
         // 兄弟节点，而 SwiftUI 的 preference 只往祖先传，挂在 topRow 上永远收不到，
         // statsRowWidth 会一直是 0，面板宽度退化成基准值，行情一多就溢出到面板外。
@@ -107,8 +110,6 @@ struct NotchView: View {
         }
         .offset(x: notchAlignOffset)
         // 数字位数变化（9%→10%）会改变翼宽，加个短过渡避免硬跳
-        .animation(.easeOut(duration: 0.18), value: model.leftSlotWidth)
-        .animation(.easeOut(duration: 0.18), value: model.rightSlotWidth)
         .animation(.easeOut(duration: 0.18), value: model.combinedWidth)
         // 轮播换页时内容整体重排，宽度已按各页最大值固定，这里只让内容平滑切换
         .animation(.easeInOut(duration: 0.38), value: model.carouselPage)
@@ -151,7 +152,6 @@ struct NotchView: View {
                 .frame(width: geo.notchWidth, height: geo.notchHeight)
             rightSlot
                 .fixedSize()
-                .measuredWidth(RightSlotWidthKey.self)
                 .frame(width: rightWing - gutter - topRadius - edgeInset, alignment: .leading)
                 .padding(.leading, gutter)
                 .padding(.trailing, topRadius + edgeInset)
@@ -164,16 +164,7 @@ struct NotchView: View {
         .onPreferenceChange(LeftSlotWidthKey.self) { w in
             guard !isExpanded, w > 0 else { return }
             let page = model.carousel ? model.carouselPage : 0
-            if leftOnly || belowMode {
-                if abs((model.combinedWidths[page] ?? 0) - w) > 0.5 { model.combinedWidths[page] = w }
-            } else if layout == "split" {
-                if abs((model.leftSlotWidths[page] ?? 0) - w) > 0.5 { model.leftSlotWidths[page] = w }
-            }
-        }
-        .onPreferenceChange(RightSlotWidthKey.self) { w in
-            guard !isExpanded, layout == "split", w > 0 else { return }
-            let page = model.carousel ? model.carouselPage : 0
-            if abs((model.rightSlotWidths[page] ?? 0) - w) > 0.5 { model.rightSlotWidths[page] = w }
+            if abs((model.combinedWidths[page] ?? 0) - w) > 0.5 { model.combinedWidths[page] = w }
         }
     }
 
@@ -208,8 +199,6 @@ struct NotchView: View {
             }
             .buttonStyle(.plain)
             .help("刷新 / 配置 / 退出")
-        } else if !leftOnly {
-            carouselBox { chip(collapsedItems.count > 1 ? collapsedItems[1] : nil) }
         }
     }
 
@@ -416,13 +405,6 @@ struct LeftSlotWidthKey: SlotWidthKeyProtocol {
 
 /// 展开态底部那行的自然宽度
 struct StatsWidthKey: SlotWidthKeyProtocol {
-    static var defaultValue: CGFloat { 0 }
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-struct RightSlotWidthKey: SlotWidthKeyProtocol {
     static var defaultValue: CGFloat { 0 }
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())

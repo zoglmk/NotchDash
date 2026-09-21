@@ -102,17 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 肉眼看到的黑色主体要再减去两侧反向圆角，即 总宽 - 2 * topRadius
         let notchW = NotchGeometry()?.notchWidth ?? 0
         let screenW = NotchGeometry()?.screen.frame.width ?? 0
-        let lw = model.leftSlotWidth > 0 ? model.leftSlotWidth : 52, rw = model.rightSlotWidth > 0 ? model.rightSlotWidth : 52
-        let leftWing = lw + gutter + topRadius + edgeInset
-        let rightWing = rw + gutter + topRadius + edgeInset
+        let leftWing = model.combinedWidth + gutter + topRadius + edgeInset
         FileHandle.standardError.write("""
         布局实测（单位：点）
-          左侧内容宽 \(String(format: "%.1f", model.leftSlotWidth))   右侧内容宽 \(String(format: "%.1f", model.rightSlotWidth))
-          左翼 \(String(format: "%.1f", leftWing))   右翼 \(String(format: "%.1f", rightWing))
-          偏移 \(String(format: "%.1f", (rightWing - leftWing) / 2))
-          文字到黑色边缘：两侧都应是 edgeInset = \(edgeInset)
-          文字到刘海：两侧都应是 gutter = \(gutter)
-          面板总宽：split \(String(format: "%.1f", leftWing + notchW + rightWing))   left \(String(format: "%.1f", model.combinedWidth + gutter + topRadius + edgeInset + notchW + topRadius))   below \(String(format: "%.1f", notchW + topRadius * 2))
+          收起态内容宽 \(String(format: "%.1f", model.combinedWidth))   左翼 \(String(format: "%.1f", leftWing))
+          文字到黑色边缘：应是 edgeInset = \(edgeInset)
+          文字到刘海：应是 gutter = \(gutter)
+          面板总宽：left \(String(format: "%.1f", leftWing + notchW + topRadius))   below \(String(format: "%.1f", notchW + topRadius * 2))
           （黑色主体 = 总宽 - 2 * topRadius；开了自动排布时以实际挑中的那个为准）
           当前页 \(model.carouselPage)/\(model.carouselPageCount)   配置排布 \(model.collapsedLayout)
           各页实测宽 \(model.combinedWidths.sorted { $0.key < $1.key }.map { "\($0.key):\(String(format: "%.1f", $0.value))" }.joined(separator: " "))
@@ -221,8 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         auto.state = model.autoLayout ? .on : .off
         sub.addItem(auto)
         sub.addItem(.separator())
-        for (key, title) in [("split", "刘海左右分开"),
-                             ("left", "全部靠左"),
+        for (key, title) in [("left", "全部靠左"),
                              ("below", "刘海正下方（不占菜单栏）")] {
             let it = NSMenuItem(title: title, action: #selector(menuSetLayout(_:)), keyEquivalent: "")
             it.target = self
@@ -631,8 +626,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "accessibility_authorized": menuBarProbe.isAuthorized,
             "auto_layout": model.autoLayout,
             "configured_layout": model.collapsedLayout,
-            "left_slot_width": model.leftSlotWidth,
-            "right_slot_width": model.rightSlotWidth,
+            "collapsed_content_width": model.combinedWidth,
             "updated_at": ISO8601DateFormatter().string(from: Date()),
             "carousel_enabled": model.carousel,
             "carousel_page": model.carouselPage,
