@@ -1,4 +1,16 @@
 import SwiftUI
+import AppKit
+
+/// 收起态那个「标签 + 数值」小块的排版常量。
+/// 宽度预算和实际绘制共用这一套数字，分开写迟早会对不上。
+enum ChipMetrics {
+    /// 标签和数值之间的间距
+    static let labelValueSpacing: CGFloat = 4
+    /// 并排两个条目之间的间距
+    static let itemSpacing: CGFloat = 14
+    static let labelSize: CGFloat = 9
+    static let valueSize: CGFloat = 11
+}
 
 /// 底部那行的一个条目
 struct DisplayItem: Identifiable, Equatable {
@@ -28,11 +40,26 @@ final class AppModel: ObservableObject {
     /// 那两个记的是单个额度的宽度，拿来当并排宽度用会把内容裁掉。
     /// 各页内容的实测宽度（键是页码）。
     ///
-    /// 面板宽度只认第 0 页（额度页），不取各页最大值也不跟着当前页走：
-    /// 轮播时黑条必须纹丝不动，否则一胀一缩比不轮播还晃眼。
-    /// 行情每页只放一个，本来就比额度页窄，锁死在额度页宽度正合适。
+    /// 面板宽度取各页最大值，不跟着当前页走：轮播时黑条必须纹丝不动，
+    /// 否则一胀一缩比不轮播还晃眼。
+    ///
+    /// 也不能只认额度页。「行情页本来就比额度页窄」这个前提不成立：额度页
+    /// 宽度随百分比位数在 100~130pt 之间浮动，而行情标签长度由用户决定，
+    /// 「沪深300 4525 +0.38%」实测 118pt，比「CC 55% Codex 71%」的 115pt 还宽，
+    /// 个股（「贵州茅台 1680 +1.23%」127pt）只会更长。锁死在额度页会让这些
+    /// 内容溢出，左边留白被吃掉，文字贴到黑条边缘上。
     @Published var combinedWidths: [Int: CGFloat] = [:]
-    var combinedWidth: CGFloat { combinedWidths[0] ?? 112 }
+    /// 面板宽度 = 各页里最宽的那页。
+    ///
+    /// 每页优先用 SwiftUI 的实测值；还没轮播到、因而没测过的页用文本预算值兜底。
+    /// 没有这个兜底，黑条就得等轮播转到那一页才知道自己该多宽，于是启动后第一圈
+    /// 会被一格格撑大，加个股、额度见底改显示倒计时时也会各撑一次。
+    var combinedWidth: CGFloat {
+        let widths = (0..<carouselPageCount).map { page in
+            combinedWidths[page] ?? estimatedWidth(forPage: page)
+        }
+        return max(widths.max() ?? 0, 112)
+    }
     /// 展开态底部那一行（系统状态 + 自定义数据源）的自然宽度。
     /// 自定义数据源是用户自己加的，多少、多长都不可预知，面板得跟着它变宽。
     @Published var statsRowWidth: CGFloat = 0
@@ -66,6 +93,87 @@ final class AppModel: ObservableObject {
 
     /// 按 id 取额度，找不到返回 nil
     func quota(_ id: String) -> Quota? { quotas.first { $0.id == id } }
+
+    /// 收起态第 page 页要显示的条目。page 0 是额度，之后每页放 itemsPerPage 个行情。
+    ///
+    /// 放在 model 而不是 view 里，是因为宽度预算也要用它：两边各写一份的话，
+    /// 改了显示规则而忘了改预算，黑条就会按错的内容算宽度。
+    func items(forPage page: Int) -> [(label: String, value: String, color: Color)] {
+        if carousel, page > 0, !custom.isEmpty {
+            let start = (page - 1) * Self.itemsPerPage
+            guard start < custom.count else { return [] }
+            return custom[start..<min(start + Self.itemsPerPage, custom.count)].map {
+                ($0.label, $0.value, changeColor($0.value) ?? .white.opacity(0.9))
+            }
+        }
+        return ["claude", "codex"].compactMap { id -> (String, String, Color)? in
+            guard let q = quota(id), let used = q.headlinePercent else { return nil }
+            let shown = showRemaining ? 100 - used : used
+            return (q.short, q.headlineText ?? "\(Int(shown.rounded()))%", usageColor(used))
+        }
+    }
+
+    /// 文本里带涨跌幅就按涨跌上色，平盘和普通文本保持原样
+    func changeColor(_ value: String) -> Color? {
+        guard let v = changeValue(in: value), v != 0 else { return nil }
+        return (v > 0) == redUp ? usageDangerColor : usageSafeColor
+    }
+
+    /// 不等 SwiftUI 渲染，直接按文本算出某一页的内容宽度。
+    ///
+    /// 和实测值的偏差：四组真实内容对照下来，这个算法稳定比 SwiftUI 小
+    /// 0.3~0.6pt，方向一致，所以补一个常量。宁可多零点几个点的留白，
+    /// 也不要算小了让文字贴到黑条边缘上。
+    func estimatedWidth(forPage page: Int) -> CGFloat {
+        let items = items(forPage: page)
+        guard !items.isEmpty else { return 0 }
+        let chips = items.reduce(CGFloat(0)) { $0 + Self.chipWidth(label: $1.label, value: $1.value) }
+        let gaps = CGFloat(items.count - 1) * ChipMetrics.itemSpacing
+        return chips + gaps + Self.estimateSlack
+    }
+
+    /// 预算补偿，见 estimatedWidth 的说明
+    private static let estimateSlack: CGFloat = 1
+
+    /// 一个「标签 + 数值」小块的宽度
+    static func chipWidth(label: String, value: String) -> CGFloat {
+        textWidth(label, font: roundedFont(ChipMetrics.labelSize, .bold))
+            + ChipMetrics.labelValueSpacing
+            + textWidth(value, font: roundedDigitFont(ChipMetrics.valueSize, .semibold))
+    }
+
+    private static func textWidth(_ s: String, font: NSFont) -> CGFloat {
+        (s as NSString).size(withAttributes: [.font: font]).width
+    }
+
+    /// 对应 SwiftUI 的 .system(size:weight:design: .rounded)
+    private static func roundedFont(_ size: CGFloat, _ weight: NSFont.Weight) -> NSFont {
+        let base = NSFont.systemFont(ofSize: size, weight: weight)
+        guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return NSFont(descriptor: d, size: size) ?? base
+    }
+
+    /// 同上，再加 .monospacedDigit()。数值用等宽数字，否则 11% 和 88% 不一样宽
+    private static func roundedDigitFont(_ size: CGFloat, _ weight: NSFont.Weight) -> NSFont {
+        let base = NSFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+        guard let d = base.fontDescriptor.withDesign(.rounded) else { return base }
+        return NSFont(descriptor: d, size: size) ?? base
+    }
+
+    /// 丢掉超出当前页数的实测宽度。
+    ///
+    /// 宽度改成取各页最大值之后，这一步是必须的：关掉轮播、或者删掉一个行情
+    /// 标的之后，那一页的宽度还留在字典里，黑条就再也缩不回去了。
+    func pruneWidths() {
+        let count = carouselPageCount
+        func prune(_ d: inout [Int: CGFloat]) {
+            guard d.keys.contains(where: { $0 < 0 || $0 >= count }) else { return }
+            d = d.filter { (0..<count).contains($0.key) }
+        }
+        prune(&combinedWidths)
+        prune(&leftSlotWidths)
+        prune(&rightSlotWidths)
+    }
 }
 
 /// 额度 → 颜色。入参是**已用**百分比，数字和进度条共用。

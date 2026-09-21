@@ -46,8 +46,9 @@ struct NotchView: View {
         // 两侧都挤不下，只能收到刘海正下方
         return "below"
     }
-    /// 靠左模式下两个额度之间的间距
-    private let bothSpacing: CGFloat = 14
+    /// 靠左模式下两个额度之间的间距。用 ChipMetrics 里那份，
+    /// 宽度预算算的是同一个数，写两遍迟早对不上
+    private var bothSpacing: CGFloat { ChipMetrics.itemSpacing }
 
     /// 全部靠左模式：右侧不伸出，避免压住菜单栏右边那排图标
     private var leftOnly: Bool { !isExpanded && layout == "left" }
@@ -213,36 +214,22 @@ struct NotchView: View {
         }
     }
 
-    /// 收起态当前这一页要显示的条目。
-    /// 开了轮播且有行情数据时，在「额度」和「行情」两页之间轮换。
+    /// 收起态当前这一页要显示的条目。内容由 model 决定，
+    /// 宽度预算用的是同一个方法，显示和预算不会各算各的。
     private var collapsedItems: [(label: String, value: String, color: Color)] {
-        if model.carousel, model.carouselPage > 0, !model.custom.isEmpty {
-            let per = AppModel.itemsPerPage
-            let start = (model.carouselPage - 1) * per
-            guard start < model.custom.count else { return [] }
-            let slice = model.custom[start..<min(start + per, model.custom.count)]
-            // 一次只显示一个，点位放得下（「上证 3912 +0.94%」比额度页那两项还窄）
-            return slice.map {
-                ($0.label, $0.value, changeColor($0.value) ?? .white.opacity(0.9))
-            }
-        }
-        return ["claude", "codex"].compactMap { id -> (String, String, Color)? in
-            guard let q = model.quota(id), let used = q.headlinePercent else { return nil }
-            let shown = model.showRemaining ? 100 - used : used
-            return (q.short, q.headlineText ?? "\(Int(shown.rounded()))%", usageColor(used))
-        }
+        model.items(forPage: model.carousel ? model.carouselPage : 0)
     }
 
     /// 一个条目：标签 + 数值。整体亮度恒定，只有数值带颜色。
     @ViewBuilder private func chip(_ item: (label: String, value: String, color: Color)?) -> some View {
         if let item {
-            HStack(spacing: 4) {
+            HStack(spacing: ChipMetrics.labelValueSpacing) {
                 Text(item.label)
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: ChipMetrics.labelSize, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
                     .fixedSize()
                 Text(item.value)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.system(size: ChipMetrics.valueSize, weight: .semibold, design: .rounded))
                     .foregroundStyle(item.color)
                     .monospacedDigit()
                     .fixedSize()
@@ -379,16 +366,9 @@ struct NotchView: View {
     private var customRow: some View {
         measuredRow {
             ForEach(model.custom.prefix(5)) { item in
-                stat(item.label, item.value, color: changeColor(item.value))
+                stat(item.label, item.value, color: model.changeColor(item.value))
             }
         }
-    }
-
-    /// 输出里带涨跌幅就按涨跌上色，平盘和普通文本保持原样
-    private func changeColor(_ value: String) -> Color? {
-        guard let v = changeValue(in: value), v != 0 else { return nil }
-        let rising = v > 0
-        return (rising == model.redUp) ? usageDangerColor : usageSafeColor
     }
 
     /// 一行内容：取自然宽度、上报给面板决定该多宽，然后左对齐。
