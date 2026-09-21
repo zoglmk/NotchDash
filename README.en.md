@@ -58,7 +58,7 @@ The first quota read may bring up a Keychain authorization dialog; click Allow. 
 it to read the login state Claude Code already stored, and neither saves nor forwards it
 (see Data sources).
 
-Everything else lives in the right-click menu: indices, carousel, layout and display mode.
+Everything else lives in the right-click menu: indices, carousel, gain/loss colors, layout and display mode.
 
 ### Optional: route Claude Code quota through the local channel
 
@@ -177,7 +177,7 @@ Right-click the panel, or click `⋯` after expanding, and choose "Quit NotchDas
 ## Configuration
 
 Most options are available from the right-click menu, including display mode, carousel,
-indices and layout. The config file is `~/.notchdash/config.json` and changes take effect
+indices, gain/loss colors and layout. The config file is `~/.notchdash/config.json` and changes take effect
 within 20 seconds.
 
 ```json
@@ -207,7 +207,7 @@ within 20 seconds.
 | `oauth_fallback` | Whether the API fallback is allowed. Set to `false` for no network access and no credential reads |
 | `show_remaining` | `true` shows remaining quota, `false` shows used quota |
 | `carousel` / `carousel_interval` | Carousel switch and interval in seconds, minimum 2 |
-| `red_up` | `true` colors gains red (Chinese convention), `false` colors gains green |
+| `red_up` | `true` colors gains red (Chinese convention), `false` colors gains green. Applies to both indices and custom sources |
 | `auto_layout` | Whether to pick the layout from measured menu bar usage. Requires Accessibility permission |
 | `collapsed_layout` | Layout used when auto-layout is off: `split`, `left` or `below` |
 
@@ -218,6 +218,9 @@ below 30% remaining turns red.
 
 Select common indices from the "Indices" submenu, or use "Add symbol" to enter an individual
 stock; its name is fetched automatically. Refresh interval ranges from 10 seconds to 5 minutes.
+
+The same submenu has "Gain/loss colors", switching between red-for-gains (Chinese convention)
+and green-for-gains (US convention). It applies to both indices and custom sources.
 
 Common codes:
 

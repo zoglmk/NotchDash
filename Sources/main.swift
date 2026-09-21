@@ -281,7 +281,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         freq.submenu = sub
         menu.addItem(freq)
+
+        // 涨跌配色：A 股习惯红涨，美股习惯绿涨，看哪边市场就选哪个
+        let colorItem = NSMenuItem(title: "涨跌配色", action: nil, keyEquivalent: "")
+        let colorSub = NSMenu()
+        for (title, red) in [("红涨绿跌（A 股）", true), ("绿涨红跌（美股）", false)] {
+            let it = NSMenuItem(title: title, action: #selector(menuSetRedUp(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = red
+            it.state = config.redUp == red ? .on : .off
+            colorSub.addItem(it)
+        }
+        colorItem.submenu = colorSub
+        menu.addItem(colorItem)
         return menu
+    }
+
+    /// 切换涨跌配色。同时改 model 而不是等下一轮 refreshQuotas 同步，
+    /// 否则点完最多要等 20 秒才看到颜色变化，像是没生效。
+    @objc private func menuSetRedUp(_ sender: NSMenuItem) {
+        guard let red = sender.representedObject as? Bool, red != config.redUp else { return }
+        config.redUp = red
+        model.redUp = red
+        writeConfig(["red_up": red])
+        window?.contentView?.menu = buildMenu()
     }
 
     @objc private func menuToggleStock(_ sender: NSMenuItem) {

@@ -36,7 +36,7 @@ struct Config: Decodable {
     var autoLayout: Bool = true
     /// 是否已经弹过辅助功能授权请求。只弹一次，别反复打扰
     var accessibilityPromptShown: Bool = false
-    /// 自定义数据源里涨跌的配色：true = 红涨绿跌（A 股习惯），false = 绿涨红跌
+    /// 行情与自定义数据源里涨跌的配色：true = 红涨绿跌（A 股习惯），false = 绿涨红跌（美股习惯）
     var redUp: Bool = true
     /// 收起态是否在「额度」和「行情」之间轮换显示
     var carousel: Bool = false
