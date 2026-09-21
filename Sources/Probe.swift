@@ -65,14 +65,41 @@ enum Probe {
         print(String(format: "左侧可用 %.1f 点    右侧可用 %.1f 点", s.left, s.right))
         print()
         // 判据跟面板一致：左边放得下并排的内容就靠左，否则收到刘海正下方。
-        // 内容宽度这里只能估（面板里那个是运行时实测的，命令行拿不到），
-        // 43 + 14 + 51 是两个额度并排的典型宽度，8 + 10 + 7 是 wingWidth 的固定部分。
-        let need双 = 43.0 + 14 + 51 + 8 + 10 + 7
-        print(String(format: "  全部靠左需要   左 ≥ %.0f     → %@", need双,
-                     s.left >= need双 ? "✅ 放得下" : "❌ 放不下"))
+        //
+        // 内容宽度优先读面板写的实测值。这里自己估的话会偏小，因为内容有多宽
+        // 取决于额度百分比的位数和行情标签的长度，而那是渲染完才量得到的。
+        // 估算和实测差十来个点，正好够让诊断结论和面板实际行为相反。
+        let measured = measuredContentWidth()
+        let content = measured?.width ?? 43.0 + 14 + 51
+        let need双 = content + 8 + 10 + 7
+        let note = measured.map { "面板实测 \(String(format: "%.1f", $0.width))，\($0.age)" }
+            ?? "估算值，面板还没跑过"
+        print(String(format: "  全部靠左需要   左 ≥ %.0f     → %@   （%@）", need双,
+                     s.left >= need双 ? "✅ 放得下" : "❌ 放不下", note))
         let pick = s.left >= need双 ? "全部靠左" : "刘海正下方"
         print("\n👉 自动选择: \(pick)")
         print(String(repeating: "─", count: 52))
+    }
+
+    /// 从面板写的状态文件里取收起态内容的实测宽度。
+    /// 面板没跑过就没有这个文件，返回 nil 让调用方退回估算。
+    private static func measuredContentWidth() -> (width: Double, age: String)? {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".notchdash/status.json")
+        guard let d = try? Data(contentsOf: url),
+              let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let w = o["collapsed_content_width"] as? Double, w > 0 else { return nil }
+        // 顺带报出这份数据有多旧：面板久没跑的话，标的换过了它就不准了
+        let age: String = {
+            guard let iso = o["updated_at"] as? String,
+                  let t = ISO8601DateFormatter().date(from: iso) else { return "时间未知" }
+            let sec = Int(Date().timeIntervalSince(t))
+            if sec < 60 { return "刚刚写的" }
+            if sec < 3600 { return "\(sec / 60) 分钟前写的" }
+            if sec < 86400 { return "\(sec / 3600) 小时前写的" }
+            return "\(sec / 86400) 天前写的"
+        }()
+        return (w, age)
     }
 
     static func run() {
