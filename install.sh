@@ -55,5 +55,9 @@ else
   open "$DEST"
 fi
 
+# 清掉构建产物：已经装到 $DEST 了，留着会让 Spotlight 搜出两个同名 App。
+# 只跑 build.sh 不装的话产物会保留，不影响单独构建调试。
+rm -rf "build/$APP_NAME.app"
+
 echo
 echo "✅ 完成。右键点击刘海下方的面板可以刷新、改配置、退出。"
