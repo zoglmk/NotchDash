@@ -8,10 +8,6 @@ if args.contains("--statusline-tee") {
     StatuslineTee.run()
     exit(0)
 }
-if args.contains("--probe-menubar") {
-    Probe.runMenuBar()
-    exit(0)
-}
 if args.contains("--probe-oauth") {
     Probe.runOAuthOnly()
     exit(0)
@@ -57,7 +53,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { _ = self?.rebuildWindow() }
         }
 
-        requestAccessibilityIfNeeded()
         startRefreshing()
 
         // 调试用：NOTCHDASH_DEMO=expanded 启动即展开
@@ -142,7 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hosting.menu = buildMenu()
         model.showRemaining = config.showRemaining
         model.collapsedLayout = config.collapsedLayout
-        model.autoLayout = config.autoLayout
         model.redUp = config.redUp
         model.carousel = config.carousel
         model.hasAnyQuotaSource = ClaudeUsageProvider.isInstalled || CodexUsageProvider.isInstalled
@@ -212,18 +206,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 收起态排布
         let layoutItem = NSMenuItem(title: "收起态排布", action: nil, keyEquivalent: "")
         let sub = NSMenu()
-        let auto = NSMenuItem(title: autoLayoutTitle(), action: #selector(menuToggleAuto), keyEquivalent: "")
-        auto.target = self
-        auto.state = model.autoLayout ? .on : .off
-        sub.addItem(auto)
-        sub.addItem(.separator())
         for (key, title) in [("left", "全部靠左"),
                              ("below", "刘海正下方（不占菜单栏）")] {
             let it = NSMenuItem(title: title, action: #selector(menuSetLayout(_:)), keyEquivalent: "")
             it.target = self
             it.representedObject = key
-            it.state = (!model.autoLayout && model.collapsedLayout == key) ? .on : .off
-            it.isEnabled = !model.autoLayout
+            it.state = model.collapsedLayout == key ? .on : .off
             sub.addItem(it)
         }
         layoutItem.submenu = sub
@@ -373,34 +361,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window?.contentView?.menu = buildMenu()
     }
 
-    /// 自动排布这一项的标题：顺带把量到的空间显示出来，方便判断
-    private func autoLayoutTitle() -> String {
-        guard menuBarProbe.isAuthorized else { return "自动（需辅助功能权限）" }
-        guard let s = model.menuBarSpace else { return "自动适应菜单栏" }
-        return String(format: "自动适应菜单栏（左 %.0f / 右 %.0f 可用）", s.left, s.right)
-    }
-
-    @objc private func menuToggleAuto() {
-        // 想开自动但还没授权：弹系统授权框，引导去设置里勾选
-        if !model.autoLayout && !menuBarProbe.isAuthorized {
-            let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            _ = AXIsProcessTrustedWithOptions(opts)
-        }
-        model.autoLayout.toggle()
-        config.autoLayout = model.autoLayout
-        writeConfig(["auto_layout": model.autoLayout])
-        if model.autoLayout { refreshMenuBarSpace() }
-        window?.contentView?.menu = buildMenu()
-    }
 
     /// 设置收起态排布，并写回配置
     @objc private func menuSetLayout(_ sender: NSMenuItem) {
         guard let key = sender.representedObject as? String else { return }
         model.collapsedLayout = key
         config.collapsedLayout = key
-        model.autoLayout = false            // 手动指定了就别再自动改
-        config.autoLayout = false
-        writeConfig(["collapsed_layout": key, "auto_layout": false])
+        writeConfig(["collapsed_layout": key])
         window?.contentView?.menu = buildMenu()
     }
 
@@ -486,7 +453,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let oauthProvider = OAuthUsageProvider()
     private let customProvider = CustomSourceProvider()
     private let stockProvider = StockProvider()
-    private let menuBarProbe = MenuBarProbe()
     private var config = Config.load()
     private var fastTimer: Timer?
     private var slowTimer: Timer?
@@ -495,34 +461,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let collectQueue = DispatchQueue(label: "app.notchdash.NotchDash.collect", qos: .utility)
     /// 菜单栏探测单独一条队列。全量扫描要一秒多，挤在上面那条队列里
     /// 会把 CPU / 网速的采样一起堵住，差分间隔就不准了。
-    private let menuBarQueue = DispatchQueue(label: "app.notchdash.NotchDash.menubar", qos: .utility)
 
     private func startRefreshing() {
         refreshSystem()
         refreshQuotas()
-        refreshMenuBarSpace()
         startCarousel()
 
-        // 切换 App：只有菜单长度会变，图标没动，用缓存快查即可
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshMenuBarSpace(rescanExtras: false) }
-        }
-
-        // App 启动/退出：状态栏图标可能增减，必须重新全量扫描。
-        // 延迟一下再扫——图标是 App 起来之后才注册的，立刻扫会扫了个寂寞。
-        for name in [NSWorkspace.didLaunchApplicationNotification,
-                     NSWorkspace.didTerminateApplicationNotification] {
-            NSWorkspace.shared.notificationCenter.addObserver(
-                forName: name, object: nil, queue: .main
-            ) { [weak self] _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    MainActor.assumeIsolated { self?.refreshMenuBarSpace(rescanExtras: true) }
-                }
-            }
-        }
         // 系统状态变化快，2 秒一次；CPU/网速本来就要靠两次采样求差
         fastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshSystem() }
@@ -532,14 +476,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 self?.config = Config.load()   // 改了配置文件不用重启
                 self?.refreshQuotas()
-                // 兜底重扫。图标增减靠上面的 App 启停事件就够了，
-                // 这里只防漏网（比如 App 没退出但自己把图标撤了）。
-                // 注意括号：?? 的优先级比 % 低，不加括号会变成 tick == 0，永远不成立。
-                guard let self else { return }
-                self.menuBarTick += 1
-                if self.menuBarTick % 3 == 0 {
-                    self.refreshMenuBarSpace(rescanExtras: true)
-                }
             }
         }
     }
@@ -579,52 +515,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// 想用自动排布但还没授权时，启动时请求一次（仅一次）。
-    /// 没有这个权限 App 照常工作，只是排布得自己在菜单里选。
-    private func requestAccessibilityIfNeeded() {
-        guard config.autoLayout,
-              !menuBarProbe.isAuthorized,
-              !config.accessibilityPromptShown else { return }
-        config.accessibilityPromptShown = true
-        writeConfig(["accessibility_prompt_shown": true])
-        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(opts)
-    }
-
-    /// 量一下菜单栏两侧还剩多少空间。走辅助功能接口，可能偏慢，放后台。
-    private var menuBarTick = 0
-
-    private func refreshMenuBarSpace(rescanExtras: Bool = true) {
-        guard let geo = NotchGeometry() else { return }
-        guard config.autoLayout, menuBarProbe.isAuthorized else {
-            writeStatus(nil)      // 没授权也要留个记录，方便排查
-            return
-        }
-        let probe = menuBarProbe
-        let notchLeft = geo.screen.frame.midX - geo.notchWidth / 2
-        let notchRight = geo.screen.frame.midX + geo.notchWidth / 2
-        let frame = geo.screen.frame
-        menuBarQueue.async { [weak self] in
-            let space = probe.probe(notchLeft: notchLeft, notchRight: notchRight,
-                                    screenFrame: frame, rescanExtras: rescanExtras)
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    if self.model.menuBarSpace != space {
-                        withAnimation(.easeOut(duration: 0.25)) { self.model.menuBarSpace = space }
-                    }
-                    self.writeStatus(space)
-                }
-            }
-        }
-    }
-
     /// 把当前运行状态写到 ~/.notchdash/status.json。
     /// App 是 GUI 进程看不到 stdout，出问题时读这个文件最直接。
-    private func writeStatus(_ space: MenuBarProbe.Space?) {
-        var obj: [String: Any] = [
-            "accessibility_authorized": menuBarProbe.isAuthorized,
-            "auto_layout": model.autoLayout,
+    private func writeStatus() {
+        let obj: [String: Any] = [
             "configured_layout": model.collapsedLayout,
             "collapsed_content_width": model.combinedWidth,
             "updated_at": ISO8601DateFormatter().string(from: Date()),
@@ -633,10 +527,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "custom_item_count": model.custom.count,
             "carousel_timer_running": carouselTimer != nil,
         ]
-        if let space {
-            obj["space_left"] = space.left
-            obj["space_right"] = space.right
-        }
         let url = Config.url.deletingLastPathComponent().appendingPathComponent("status.json")
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true)
@@ -706,9 +596,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.model.custom = items
                     self?.model.showRemaining = cfg.showRemaining
                     // 每轮都记一次状态，方便从外面看到实时情况
-                    self?.writeStatus(self?.model.menuBarSpace ?? nil)
+                    self?.writeStatus()
                     self?.model.collapsedLayout = cfg.collapsedLayout
-                    self?.model.autoLayout = cfg.autoLayout
                     self?.model.redUp = cfg.redUp
                     // 行情标的增减后页数会变，丢掉已经不存在的那些页宽
                     self?.model.pruneWidths()

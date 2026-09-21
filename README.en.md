@@ -26,8 +26,6 @@ it joins the notch's own black, making the notch appear larger.
 - Market indices: A-shares, Hong Kong and US, colored by gain or loss
 - Carousel: alternates between quota and market data in the collapsed bar without changing
   its width
-- Auto-avoidance: reads where menu bar icons actually are and picks a layout that does not
-  overlap them
 - Custom sources: display the output of any shell command
 
 ## Installation
@@ -122,24 +120,6 @@ Option 2, System Settings:
 Right-clicking the icon and choosing Open no longer works on macOS 15 and later. Builds
 compiled from source are unaffected.
 
-### Automatic layout does not work
-
-Auto-avoidance needs Accessibility permission to read the coordinates of menu bar icons.
-
-1. The app asks once on first launch; click "Open System Settings"
-2. Or open System Settings → Privacy & Security → Accessibility manually
-3. Find NotchDash in the list and switch it on
-4. No restart required, it takes effect within 20 seconds
-
-The app works without this permission; you simply pick the layout yourself from the
-"Collapsed layout" submenu.
-
-Updating the app may invalidate the grant. macOS identifies applications by signature, so
-replacing the `.app` can silently disable auto-layout. Select NotchDash in the list, remove it
-with the `−` button and add it again. If two NotchDash entries appear, delete the stale one.
-
-The current state is recorded as `accessibility_authorized` in `~/.notchdash/status.json`.
-
 ### Claude Code shows "waiting for statusline"
 
 Both channels failed to return data. Check in order:
@@ -158,15 +138,16 @@ stale, and the API fallback takes over when enabled.
 ### The panel covers menu bar icons
 
 Menu bar icons fill from the right, and once the right side is full they skip over the notch
-and continue on the left, so both sides can collide with the panel. With Accessibility
-permission granted, the app measures the free space on each side and picks a layout:
+and continue on the left, so the left side can collide with the panel too. Switch between the
+two layouts from "Collapsed layout" in the `⋯` menu:
 
-| Layout | Used when |
+| Layout | What it does |
 |---|---|
-| All on the left | The left side has room |
-| Below the notch | The left side is too tight. Stays off the menu bar but covers about 21pt of window content |
+| All on the left (default) | The panel only extends to the left of the notch, never to the right |
+| Below the notch | Stays off the menu bar entirely, but covers about 21pt of window content |
 
-It can also be set manually from the menu.
+Left is the default. If menu bar icons fill up the left side, switch to below the notch, which
+never collides with any icon.
 
 ### Quitting
 
@@ -186,7 +167,6 @@ within 20 seconds.
   "carousel": true,
   "carousel_interval": 10,
   "red_up": false,
-  "auto_layout": true,
   "collapsed_layout": "left",
   "stocks": {
     "interval": 60,
@@ -207,8 +187,7 @@ within 20 seconds.
 | `show_remaining` | `true` shows remaining quota, `false` shows used quota |
 | `carousel` / `carousel_interval` | Carousel switch and interval in seconds, minimum 2 |
 | `red_up` | `true` colors gains red (Chinese convention), `false` colors gains green. Applies to both indices and custom sources |
-| `auto_layout` | Whether to pick the layout from measured menu bar usage. Requires Accessibility permission |
-| `collapsed_layout` | Layout used when auto-layout is off: `left` or `below` |
+| `collapsed_layout` | Collapsed layout: `left` (default) or `below` |
 
 Regardless of display mode, colors are always computed from the used percentage. Anything
 below 30% remaining turns red.
@@ -293,7 +272,6 @@ Requires macOS 13 or later.
 ```bash
 NotchDash --probe           # print every data source with its state and failure reason
 NotchDash --probe-oauth     # test the API fallback only
-NotchDash --probe-menubar   # print menu bar free space and the layout decision
 ```
 
 The UI can render itself to an image without screen recording permission:

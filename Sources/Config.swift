@@ -31,10 +31,6 @@ struct Config: Decodable {
     /// "left"  = 内容都放左边，面板不向刘海右侧伸出（默认）
     /// "below" = 收到刘海正下方，完全不占菜单栏
     var collapsedLayout: String = "left"
-    /// 是否根据菜单栏实际占用自动挑排布（需要辅助功能权限）
-    var autoLayout: Bool = true
-    /// 是否已经弹过辅助功能授权请求。只弹一次，别反复打扰
-    var accessibilityPromptShown: Bool = false
     /// 行情与自定义数据源里涨跌的配色：true = 红涨绿跌（A 股习惯），false = 绿涨红跌（美股习惯）
     var redUp: Bool = true
     /// 收起态是否在「额度」和「行情」之间轮换显示
@@ -64,8 +60,6 @@ struct Config: Decodable {
         // 「刘海左右分开」那种排布已经去掉，旧配置里写着 split 的按靠左处理，
         // 不然会落到一个不存在的分支上
         if collapsedLayout == "split" { collapsedLayout = "left" }
-        autoLayout = try c.decodeIfPresent(Bool.self, forKey: .autoLayout) ?? true
-        accessibilityPromptShown = try c.decodeIfPresent(Bool.self, forKey: .accessibilityPromptShown) ?? false
         redUp = try c.decodeIfPresent(Bool.self, forKey: .redUp) ?? true
         carousel = try c.decodeIfPresent(Bool.self, forKey: .carousel) ?? false
         carouselInterval = try c.decodeIfPresent(Double.self, forKey: .carouselInterval) ?? 10
@@ -74,8 +68,8 @@ struct Config: Decodable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case oauthFallback, showRemaining, collapsedLayout, autoLayout
-        case accessibilityPromptShown, redUp, carousel, carouselInterval, stocks, customSources
+        case oauthFallback, showRemaining, collapsedLayout
+        case redUp, carousel, carouselInterval, stocks, customSources
     }
 
     static func load() -> Config {

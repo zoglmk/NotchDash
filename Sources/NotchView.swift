@@ -35,15 +35,14 @@ struct NotchView: View {
     private func wingWidth(_ content: CGFloat) -> CGFloat {
         (content > 0 ? content : minSlotContent) + gutter + topRadius + edgeInset
     }
-    /// 实际生效的排布。开了自动就按菜单栏实测空间挑，否则用手动设置的。
+    /// 收起态排布。两种：内容全部靠左（默认），或者收到刘海正下方。
     ///
-    /// 只有两种：内容全部靠左，或者收到刘海正下方。原先还有一种「左右分开」，
-    /// 两侧各放一个，轮播时行情会被塞进本来只放一个额度的槽里，宽度对不上、
-    /// 显示也乱，已经去掉。
-    private var layout: String {
-        guard model.autoLayout, let space = model.menuBarSpace else { return model.collapsedLayout }
-        return space.left >= wingWidth(model.combinedWidth) ? "left" : "below"
-    }
+    /// 原先还有「自动按菜单栏空间挑」和「左右分开」两种。左右分开轮播时会把行情
+    /// 塞进只放一个额度的槽里，显示是乱的；自动那种要辅助功能权限，而本项目是
+    /// ad-hoc 签名，签名要求直接绑二进制哈希，每次重新构建授权就失效，实际上
+    /// 很难稳定工作。而且它挑出来的结果和手动选靠左没有任何区别，除非菜单栏
+    /// 左侧被图标占满——那种情况用户自己看得见，切到正下方即可。
+    private var layout: String { model.collapsedLayout }
     /// 靠左模式下两个额度之间的间距。用 ChipMetrics 里那份，
     /// 宽度预算算的是同一个数，写两遍迟早对不上
     private var bothSpacing: CGFloat { ChipMetrics.itemSpacing }

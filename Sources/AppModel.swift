@@ -74,8 +74,6 @@ final class AppModel: ObservableObject {
     @Published var showRemaining: Bool = true
     /// 收起态排布："left" 全部靠左 / "below" 刘海正下方
     @Published var collapsedLayout: String = "left"
-    /// 是否自动挑排布
-    @Published var autoLayout: Bool = true
     /// 涨跌配色：true = 红涨绿跌
     @Published var redUp: Bool = true
     /// 这台机器装没装 Claude Code / Codex。两个都没装时额度那一项根本不会出现，
@@ -95,8 +93,6 @@ final class AppModel: ObservableObject {
         guard carousel, !custom.isEmpty else { return 1 }
         return 1 + (custom.count + Self.itemsPerPage - 1) / Self.itemsPerPage
     }
-    /// 菜单栏两侧的剩余空间，nil 表示没有辅助功能权限、测不出来
-    @Published var menuBarSpace: MenuBarProbe.Space?
     /// 点界面上那个按钮时弹菜单，由 AppDelegate 注入
     var onShowMenu: (() -> Void)?
     /// 截图自检时锁死展开状态，避免鼠标恰好悬停导致截到的不是想要的那一态
