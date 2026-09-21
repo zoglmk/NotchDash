@@ -126,7 +126,14 @@ final class StockProvider: @unchecked Sendable {
                 ? ((Double(fields[3]) ?? 0) - prev) / prev * 100 : nil
         }
         guard let p = price, p > 0, let c = pct else { return nil }
-        return String(format: "%.0f %@%.2f%%", p, c >= 0 ? "+" : "", c)
+        // 先按显示精度四舍五入，再决定符号。
+        // 两个坑：接口开盘前会返回「-0.00」这种负零，而 IEEE 754 里 -0.0 >= 0 成立，
+        // 于是补上 "+"，%.2f 又保留符号位输出 "-0.00"，拼成 "+-0.00%"；
+        // 另外 -0.004 这类值四舍五入后显示为 0.00，却仍带着减号。
+        var change = (c * 100).rounded() / 100
+        if change == 0 { change = 0 }         // 归一负零
+        let sign = change > 0 ? "+" : ""      // 负号由格式化自带
+        return String(format: "%.0f %@%.2f%%", p, sign, change)
     }
 
     /// 查一个代码对应的中文名称，用于「添加代码」时自动填标签。
