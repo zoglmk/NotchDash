@@ -101,7 +101,21 @@ enum Probe {
         print("  OAuth 兜底: \(cfg.oauthFallback ? "开启" : "关闭")   自定义数据源: \(cfg.customSources.count) 个")
 
         print("\n【额度】")
-        var list = [ClaudeUsageProvider().fetch(), CodexUsageProvider().fetch()]
+        // 跟面板同一套判据：没装的通道不采集，也不显示。这里额外把原因打出来，
+        // 否则面板上少了一项，来跑自检却什么都看不出来
+        var list: [Quota] = []
+        for (name, installed, dir, make) in [
+            ("Claude Code", ClaudeUsageProvider.isInstalled, "~/.claude",
+             { ClaudeUsageProvider().fetch() }),
+            ("Codex", CodexUsageProvider.isInstalled, "~/.codex",
+             { CodexUsageProvider().fetch() }),
+        ] as [(String, Bool, String, () -> Quota)] {
+            if installed { list.append(make()) }
+            else { print("  \(name)  未安装（\(dir) 不存在），面板上不会显示这一项") }
+        }
+        if list.isEmpty {
+            print("  两个都没装，收起态会改显示 CPU 和内存")
+        }
         if cfg.oauthFallback {
             let oauth = OAuthUsageProvider()
             for i in list.indices where list[i].error != nil || list[i].isStale {

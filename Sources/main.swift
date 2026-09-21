@@ -147,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.autoLayout = config.autoLayout
         model.redUp = config.redUp
         model.carousel = config.carousel
+        model.hasAnyQuotaSource = ClaudeUsageProvider.isInstalled || CodexUsageProvider.isInstalled
         model.onShowMenu = { [weak self] in self?.showMenuAtMouse() }
 
         if let win = window {
@@ -565,7 +566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.model.carouselPage = 0
                     return
                 }
-                self.model.carouselPage = (self.model.carouselPage + 1) % pages
+                self.model.carouselPage = self.model.nextCarouselPage()
             }
         }
     }
@@ -673,8 +674,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let oauth = oauthProvider, custom = customProvider, stocks = stockProvider
         let cfg = config
         collectQueue.async { [weak self] in
-            // 主通道：纯本地读文件，零风险
-            var list = [claude.fetch(), codex.fetch()]
+            // 主通道：纯本地读文件，零风险。没装的那个直接不采，
+            // 它的「未找到 ~/.codex/sessions」对没装的人是噪音，不是信息
+            var list: [Quota] = []
+            if ClaudeUsageProvider.isInstalled { list.append(claude.fetch()) }
+            if CodexUsageProvider.isInstalled { list.append(codex.fetch()) }
 
             // 兜底：本地这份缺失或已过期时，才去问官方 API。
             // 拿不到就保留本地那份（哪怕是旧的），也比显示空白强。

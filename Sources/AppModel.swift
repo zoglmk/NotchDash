@@ -71,6 +71,10 @@ final class AppModel: ObservableObject {
     @Published var autoLayout: Bool = true
     /// 涨跌配色：true = 红涨绿跌
     @Published var redUp: Bool = true
+    /// 这台机器装没装 Claude Code / Codex。两个都没装时额度那一项根本不会出现，
+    /// 收起态改显示系统状态，免得留一块空白黑条。启动时就测好，不等第一轮刷新，
+    /// 否则头几秒会先空一下再跳出内容。
+    @Published var hasAnyQuotaSource: Bool = true
     /// 收起态是否轮换显示额度与行情
     @Published var carousel: Bool = false
     /// 当前轮到第几页：0 是额度，之后每页两个行情
@@ -106,11 +110,33 @@ final class AppModel: ObservableObject {
                 ($0.label, $0.value, changeColor($0.value) ?? .white.opacity(0.9))
             }
         }
-        return ["claude", "codex"].compactMap { id -> (String, String, Color)? in
+        let quotaItems = ["claude", "codex"].compactMap { id -> (String, String, Color)? in
             guard let q = quota(id), let used = q.headlinePercent else { return nil }
             let shown = showRemaining ? 100 - used : used
             return (q.short, q.headlineText ?? "\(Int(shown.rounded()))%", usageColor(used))
         }
+        if !quotaItems.isEmpty { return quotaItems }
+
+        // 一个额度都拿不到。装了只是暂时没数据（刚启动、没配 statusline）就先留空，
+        // 几秒后自己会有；确认没装才退回系统状态——只想看行情的人不该对着
+        // 一块空白黑条，而 CPU 和内存任何机器上都读得到。
+        guard !hasAnyQuotaSource else { return [] }
+        return [("CPU", String(format: "%.0f%%", stats.cpuPercent), .white.opacity(0.9)),
+                ("内存", String(format: "%.0f%%", stats.memoryPercent), .white.opacity(0.9))]
+    }
+
+    /// 下一个有内容的页。
+    ///
+    /// 没装 Claude Code / Codex 又配了行情时，额度页是空的，轮到它只会让面板
+    /// 空白几秒，直接跳过去。全部都空就别动，免得空转。
+    func nextCarouselPage() -> Int {
+        let count = carouselPageCount
+        guard count > 1 else { return 0 }
+        for step in 1...count {
+            let next = (carouselPage + step) % count
+            if !items(forPage: next).isEmpty { return next }
+        }
+        return carouselPage
     }
 
     /// 文本里带涨跌幅就按涨跌上色，平盘和普通文本保持原样

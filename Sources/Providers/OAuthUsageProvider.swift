@@ -102,6 +102,13 @@ final class OAuthUsageProvider: @unchecked Sendable {
 
         let authURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex/auth.json")
+        // 文件没了说明已经登出。缓存里那份是上一个账号的额度，这时候拿它回填，
+        // 本地通道刚判出来的「未登录」又会被盖掉，所以一并作废。
+        guard !Simulate.on("codex-logout"),
+              FileManager.default.fileExists(atPath: authURL.path) else {
+            lastCodexResult = nil
+            return nil
+        }
         guard let data = try? Data(contentsOf: authURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tokens = obj["tokens"] as? [String: Any],

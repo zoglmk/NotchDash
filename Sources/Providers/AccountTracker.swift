@@ -17,6 +17,7 @@ final class AccountTracker: @unchecked Sendable {
 
     /// 当前 Codex 账号的 id，读不到返回 nil
     func codexAccountId() -> String? {
+        if Simulate.on("codex-logout") { return nil }
         let authURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex/auth.json")
         guard let data = try? Data(contentsOf: authURL),

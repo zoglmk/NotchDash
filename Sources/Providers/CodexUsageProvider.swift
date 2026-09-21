@@ -7,6 +7,14 @@ final class CodexUsageProvider: Sendable {
     private let sessionsRoot = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".codex/sessions")
 
+    /// 这台机器装没装 Codex。理由同 ClaudeUsageProvider.isInstalled：
+    /// 用目录判断，sessions 子目录不存在只说明还没跑过，不代表没装。
+    static var isInstalled: Bool {
+        if Simulate.on("no-quota") { return false }
+        return FileManager.default.fileExists(atPath: FileManager.default
+            .homeDirectoryForCurrentUser.appendingPathComponent(".codex").path)
+    }
+
     /// 只扫最近改动的这么多个会话文件，避免翻遍历史
     private let maxFilesToScan = 20
     /// 每个文件只读末尾这么多字节——最新的额度记录一定在文件尾部
@@ -58,11 +66,29 @@ final class CodexUsageProvider: Sendable {
                 quota.primary = window(rl.primary)
                 quota.secondary = window(rl.secondary)
                 quota.updatedAt = ts
-                return quota
+                return loggedOutIfNeeded(quota)
             }
         }
         quota.error = "会话日志里暂无额度数据"
         return quota
+    }
+
+    /// 登出之后，会话日志不会跟着删，里面那份额度属于上一个账号，再显示出来
+    /// 就是误导：面板会一直挂着退出前的百分比，看不出「其实没登录」。
+    ///
+    /// 判据是 auth.json 里读不到账号（Codex CLI 登出时会删掉这个文件）。但不能
+    /// 一读不到就判定登出：CLI 刷新 token、重写这个文件的瞬间也读不到。所以再加
+    /// 一个条件，本地数据同时已经过期（超过 15 分钟没更新）才这么判。正在用的人
+    /// 会话日志是新鲜的，不会被误伤。
+    private func loggedOutIfNeeded(_ q: Quota) -> Quota {
+        guard AccountTracker.shared.codexAccountId() == nil, q.isStale else { return q }
+        var out = q
+        out.plan = nil
+        out.primary = nil
+        out.secondary = nil
+        out.updatedAt = nil
+        out.error = "未登录 Codex"
+        return out
     }
 
     private func window(_ w: Event.Window?) -> UsageWindow? {

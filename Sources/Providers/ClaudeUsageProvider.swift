@@ -8,6 +8,17 @@ final class ClaudeUsageProvider: Sendable {
     static let snapshotURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".notchdash/claude-usage.json")
 
+    /// 这台机器装没装 Claude Code。
+    ///
+    /// 用 ~/.claude 目录判断，不用 statusline 快照：快照缺失也可能只是没配
+    /// statusline（本来就是可选的），那种情况下 API 兜底还能拿到数据，不该当成没装。
+    /// 目录是 Claude Code 自己建的，没装就一定没有。
+    static var isInstalled: Bool {
+        if Simulate.on("no-quota") { return false }
+        return FileManager.default.fileExists(atPath: FileManager.default
+            .homeDirectoryForCurrentUser.appendingPathComponent(".claude").path)
+    }
+
     private struct Snapshot: Decodable {
         let updatedAt: DateValue?
         let fiveHour: Window?
