@@ -13,9 +13,26 @@ struct UsageWindow: Equatable {
         return "\(windowMinutes)m"
     }
 
+    /// 这个窗口是否还没开始计时。
+    ///
+    /// 限额窗口是滚动的：要等本周期内第一次请求发出，窗口才起算。在那之前
+    /// 服务端返回的 resets_at 是「此刻 + 完整窗口长度」的占位值，会跟着时间
+    /// 一起往后走。实测日志里能看到这个分界：窗口未开始时相邻两条记录的
+    /// resets_at 后移量恰好等于记录间隔，开始之后就钉死不动了。
+    ///
+    /// 这种时候显示倒计时是误导的——那个数字永远不会减少。
+    var notStarted: Bool {
+        guard usedPercent < 0.5, windowMinutes > 0, let resetsAt else { return false }
+        let remaining = resetsAt.timeIntervalSinceNow
+        let full = Double(windowMinutes) * 60
+        // 距重置还剩几乎整个窗口，说明根本没开始用
+        return remaining > full - 90
+    }
+
     /// 收起态用的紧凑倒计时，如 "23分" / "2小时" / "5天"。
     /// 那里只有一个数字的位置，放不下 "2小时30分" 这种完整写法。
     var compactResetText: String? {
+        if notStarted { return "未开始" }
         guard let resetsAt else { return nil }
         let s = resetsAt.timeIntervalSinceNow
         guard s > 0 else { return "即将" }
@@ -28,6 +45,7 @@ struct UsageWindow: Equatable {
 
     /// 距离重置还有多久，如 "2h30m"
     var resetText: String? {
+        if notStarted { return "窗口未开始" }
         guard let resetsAt else { return nil }
         let s = resetsAt.timeIntervalSinceNow
         guard s > 0 else { return "即将重置" }
