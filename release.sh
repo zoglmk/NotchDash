@@ -1,10 +1,10 @@
 #!/bin/bash
 # 打一个可分发的压缩包
-#   ./release.sh 0.2.3
+#   ./release.sh 0.2.4
 set -euo pipefail
 cd "$(dirname "$0")"
 
-VERSION="${1:-0.2.3}"
+VERSION="${1:-0.2.4}"
 OUT="dist"
 APP_NAME="NotchDash"
 
