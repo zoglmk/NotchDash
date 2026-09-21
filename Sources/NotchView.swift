@@ -11,13 +11,9 @@ struct NotchView: View {
 
     /// 展开宽度：先按屏幕定个基准，再保证底部那行内容放得下（自定义数据源
     /// 数量和长度都由用户决定），最后不超过屏幕宽度。
-    private var expandedWidth: CGFloat {
-        let base = min(max(geo.screen.frame.width * 0.30, 430), 600)
-        let needed = model.statsRowWidth + detailPadding * 2 + 16
-        return min(max(base, needed), geo.screen.frame.width - 60)
-    }
+    private var expandedWidth: CGFloat { model.expandedWidth(screenWidth: geo.screen.frame.width) }
     /// 展开态内容的左右内边距
-    private let detailPadding: CGFloat = 22
+    private var detailPadding: CGFloat { PanelMetrics.detailPadding }
     /// 内容与刘海之间的水平留白
     private let gutter: CGFloat = 8
     /// 顶部反向圆角半径。注意：形状的黑色主体宽度只有 width - 2*topRadius，
@@ -97,6 +93,12 @@ struct NotchView: View {
         )
         // 只有黑色面板区域接收鼠标，其余透明区域事件穿透到下层窗口
         .contentShape(NotchShape(topRadius: topRadius, bottomRadius: isExpanded ? 20 : 12))
+        // 展开态底部两行的宽度必须在这里接。它们在 detailBody 里，和 topRow 是
+        // 兄弟节点，而 SwiftUI 的 preference 只往祖先传，挂在 topRow 上永远收不到，
+        // statsRowWidth 会一直是 0，面板宽度退化成基准值，行情一多就溢出到面板外。
+        .onPreferenceChange(StatsWidthKey.self) { w in
+            if w > 0, abs(w - model.statsRowWidth) > 1 { model.statsRowWidth = w }
+        }
         .onHover { hovering in
             guard !model.stateLocked else { return }
             withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
@@ -158,9 +160,6 @@ struct NotchView: View {
         .clipped()
         // 只在左右分开且收起时才更新实测宽度。其他排布下两侧内容不一样，
         // 若照单全收就会变成「布局变→测量变→布局又变」的来回抖动。
-        .onPreferenceChange(StatsWidthKey.self) { w in
-            if w > 0, abs(w - model.statsRowWidth) > 1 { model.statsRowWidth = w }
-        }
         // 按页分别记录宽度，面板取各页最大值，轮播时才不会一胀一缩
         .onPreferenceChange(LeftSlotWidthKey.self) { w in
             guard !isExpanded, w > 0 else { return }
@@ -362,11 +361,16 @@ struct NotchView: View {
         }
     }
 
-    /// 自定义数据源行
+    /// 自定义数据源行。放不下就换行，不往右挤出面板
     private var customRow: some View {
-        measuredRow {
-            ForEach(model.custom.prefix(5)) { item in
-                stat(item.label, item.value, color: model.changeColor(item.value))
+        VStack(alignment: .leading, spacing: 7) {
+            let rows = model.statRows(screenWidth: geo.screen.frame.width)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, chunk in
+                measuredRow {
+                    ForEach(chunk) { item in
+                        stat(item.label, item.value, color: model.changeColor(item.value))
+                    }
+                }
             }
         }
     }
@@ -376,7 +380,7 @@ struct NotchView: View {
     /// 这里不能留 Spacer 或用 maxWidth 再测量：那样量到的是容器宽度，
     /// 而容器宽度又由这个量值决定，会一路撑到屏幕边缘。
     private func measuredRow<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        HStack(spacing: 14) { content() }
+        HStack(spacing: PanelMetrics.statSpacing) { content() }
             .fixedSize()
             .background(
                 GeometryReader { g in
@@ -387,10 +391,11 @@ struct NotchView: View {
     }
 
     private func stat(_ label: String, _ value: String, color: Color? = nil) -> some View {
-        HStack(spacing: 4) {
-            Text(label).font(.system(size: 9.5)).foregroundStyle(.white.opacity(0.38))
+        HStack(spacing: PanelMetrics.statLabelSpacing) {
+            Text(label).font(.system(size: PanelMetrics.statLabelSize))
+                .foregroundStyle(.white.opacity(0.38))
             Text(value)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .font(.system(size: PanelMetrics.statValueSize, weight: .medium, design: .rounded))
                 .foregroundStyle(color ?? .white.opacity(0.88))
                 .monospacedDigit()
         }

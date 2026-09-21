@@ -3,6 +3,22 @@ import AppKit
 
 /// 收起态那个「标签 + 数值」小块的排版常量。
 /// 宽度预算和实际绘制共用这一套数字，分开写迟早会对不上。
+/// 展开态的排版常量。和 ChipMetrics 一样，宽度计算与实际绘制共用这一份
+enum PanelMetrics {
+    /// 展开态内容的左右内边距
+    static let detailPadding: CGFloat = 22
+    /// 底部行里两个条目之间的间距
+    static let statSpacing: CGFloat = 14
+    /// 条目内部，标签和数值之间的间距
+    static let statLabelSpacing: CGFloat = 4
+    static let statLabelSize: CGFloat = 9.5
+    static let statValueSize: CGFloat = 11
+    /// 底部最多排几行，再多面板就太高了
+    static let maxStatRows = 3
+    /// 面板宽度公式里的额外余量
+    static let widthSlack: CGFloat = 16
+}
+
 enum ChipMetrics {
     /// 标签和数值之间的间距
     static let labelValueSpacing: CGFloat = 4
@@ -196,6 +212,63 @@ final class AppModel: ObservableObject {
         guard carousel, items(forPage: carouselPage).isEmpty else { return }
         let next = nextCarouselPage()
         if next != carouselPage { carouselPage = next }
+    }
+
+    /// 底部那几行怎么分。
+    ///
+    /// 不写死每行几个：同样是「大屏」，16 寸和外接 4K 能放的数量差一倍，而标签
+    /// 长度也由用户决定（「上证」和「深证成指」差着一半宽度）。所以按实际宽度
+    /// 贪心填充，放得下就继续排，放不下就换行，屏幕宽自然就排得多。
+    func statRows(screenWidth: CGFloat) -> [[DisplayItem]] {
+        let available = statRowWidthBudget(screenWidth: screenWidth)
+        var rows: [[DisplayItem]] = []
+        var current: [DisplayItem] = []
+        var used: CGFloat = 0
+        for item in custom {
+            let w = Self.statWidth(label: item.label, value: item.value)
+            // 每行至少放一个，否则标签长到超过整行宽度时会空转
+            if current.isEmpty {
+                current = [item]; used = w
+                continue
+            }
+            let grown = used + PanelMetrics.statSpacing + w
+            if grown <= available {
+                current.append(item); used = grown
+            } else {
+                rows.append(current)
+                if rows.count >= PanelMetrics.maxStatRows { return rows }
+                current = [item]; used = w
+            }
+        }
+        if !current.isEmpty { rows.append(current) }
+        return Array(rows.prefix(PanelMetrics.maxStatRows))
+    }
+
+    /// 分行时可用的宽度。
+    ///
+    /// 只看屏幕，不看内容：面板宽度本身是由内容撑出来的，拿它当分行依据会绕回去
+    /// 自己咬自己。减掉余量之后，排满一行正好不会把面板撑得比基准宽。
+    private func statRowWidthBudget(screenWidth: CGFloat) -> CGFloat {
+        let base = min(max(screenWidth * 0.30, 430), 600)
+        return base - PanelMetrics.detailPadding * 2 - PanelMetrics.widthSlack
+    }
+
+    /// 底部行里一个条目的宽度。字体要和 NotchView 的 stat() 对上
+    static func statWidth(label: String, value: String) -> CGFloat {
+        textWidth(label, font: NSFont.systemFont(ofSize: PanelMetrics.statLabelSize))
+            + PanelMetrics.statLabelSpacing
+            + textWidth(value, font: roundedDigitFont(PanelMetrics.statValueSize, .medium))
+    }
+
+    /// 展开态面板该多宽。
+    ///
+    /// 先按屏幕定个基准，再保证底部那几行放得下（行情和自定义数据源的数量、
+    /// 长度都由用户决定），最后不超过屏幕。放在 model 而不是 view 里，是因为
+    /// 截图自检的日志也要打印这个值，各算一份迟早对不上。
+    func expandedWidth(screenWidth: CGFloat) -> CGFloat {
+        let base = min(max(screenWidth * 0.30, 430), 600)
+        let needed = statsRowWidth + PanelMetrics.detailPadding * 2 + PanelMetrics.widthSlack
+        return min(max(base, needed), screenWidth - 60)
     }
 
     /// 丢掉超出当前页数的实测宽度。

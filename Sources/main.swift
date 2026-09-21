@@ -101,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 换一个机型就不对了。注意这里算的是面板总宽（形状的包络），
         // 肉眼看到的黑色主体要再减去两侧反向圆角，即 总宽 - 2 * topRadius
         let notchW = NotchGeometry()?.notchWidth ?? 0
+        let screenW = NotchGeometry()?.screen.frame.width ?? 0
         let lw = model.leftSlotWidth > 0 ? model.leftSlotWidth : 52, rw = model.rightSlotWidth > 0 ? model.rightSlotWidth : 52
         let leftWing = lw + gutter + topRadius + edgeInset
         let rightWing = rw + gutter + topRadius + edgeInset
@@ -117,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           各页实测宽 \(model.combinedWidths.sorted { $0.key < $1.key }.map { "\($0.key):\(String(format: "%.1f", $0.value))" }.joined(separator: " "))
           各页预算宽 \((0..<model.carouselPageCount).map { "\($0):\(String(format: "%.1f", model.estimatedWidth(forPage: $0)))" }.joined(separator: " "))
           靠左/正下方取用 \(String(format: "%.1f", model.combinedWidth))
+          展开态：底部行实测 \(String(format: "%.1f", model.statsRowWidth))   面板宽 \(String(format: "%.1f", model.expandedWidth(screenWidth: screenW)))   窗口宽 \(String(format: "%.1f", min(screenW, 760)))
 
         """.data(using: .utf8)!)
 
