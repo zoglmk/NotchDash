@@ -158,8 +158,6 @@ struct NotchView: View {
         }
         .frame(height: geo.notchHeight)
         .clipped()
-        // 只在左右分开且收起时才更新实测宽度。其他排布下两侧内容不一样，
-        // 若照单全收就会变成「布局变→测量变→布局又变」的来回抖动。
         // 按页分别记录宽度，面板取各页最大值，轮播时才不会一胀一缩
         .onPreferenceChange(LeftSlotWidthKey.self) { w in
             guard !isExpanded, w > 0 else { return }

@@ -64,13 +64,13 @@ enum Probe {
         guard let s = result else { print("探测失败"); return }
         print(String(format: "左侧可用 %.1f 点    右侧可用 %.1f 点", s.left, s.right))
         print()
-        let need单 = 52.0 + 8 + 10 + 7
+        // 判据跟面板一致：左边放得下并排的内容就靠左，否则收到刘海正下方。
+        // 内容宽度这里只能估（面板里那个是运行时实测的，命令行拿不到），
+        // 43 + 14 + 51 是两个额度并排的典型宽度，8 + 10 + 7 是 wingWidth 的固定部分。
         let need双 = 43.0 + 14 + 51 + 8 + 10 + 7
-        print(String(format: "  左右分开需要   右 ≥ %.0f      → %@", need单,
-                     s.right >= need单 ? "✅ 放得下" : "❌ 放不下"))
         print(String(format: "  全部靠左需要   左 ≥ %.0f     → %@", need双,
                      s.left >= need双 ? "✅ 放得下" : "❌ 放不下"))
-        let pick = s.right >= need单 ? "刘海左右分开" : (s.left >= need双 ? "全部靠左" : "刘海正下方")
+        let pick = s.left >= need双 ? "全部靠左" : "刘海正下方"
         print("\n👉 自动选择: \(pick)")
         print(String(repeating: "─", count: 52))
     }
