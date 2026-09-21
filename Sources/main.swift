@@ -97,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 顺带把实际布局数值打出来，比对着图片目测靠谱
         let gutter: CGFloat = 8, topRadius: CGFloat = 10, edgeInset: CGFloat = 7
+        // 刘海宽度按当前屏实测。原先硬编码 185，在这台机器上恰好是对的，
+        // 换一个机型就不对了。注意这里算的是面板总宽（形状的包络），
+        // 肉眼看到的黑色主体要再减去两侧反向圆角，即 总宽 - 2 * topRadius
+        let notchW = NotchGeometry()?.notchWidth ?? 0
         let lw = model.leftSlotWidth > 0 ? model.leftSlotWidth : 52, rw = model.rightSlotWidth > 0 ? model.rightSlotWidth : 52
         let leftWing = lw + gutter + topRadius + edgeInset
         let rightWing = rw + gutter + topRadius + edgeInset
@@ -104,9 +108,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         布局实测（单位：点）
           左侧内容宽 \(String(format: "%.1f", model.leftSlotWidth))   右侧内容宽 \(String(format: "%.1f", model.rightSlotWidth))
           左翼 \(String(format: "%.1f", leftWing))   右翼 \(String(format: "%.1f", rightWing))
-          面板总宽 \(String(format: "%.1f", leftWing + 185 + rightWing))   偏移 \(String(format: "%.1f", (rightWing - leftWing) / 2))
+          偏移 \(String(format: "%.1f", (rightWing - leftWing) / 2))
           文字到黑色边缘：两侧都应是 edgeInset = \(edgeInset)
           文字到刘海：两侧都应是 gutter = \(gutter)
+          面板总宽：split \(String(format: "%.1f", leftWing + notchW + rightWing))   left \(String(format: "%.1f", model.combinedWidth + gutter + topRadius + edgeInset + notchW + topRadius))   below \(String(format: "%.1f", notchW + topRadius * 2))
+          （黑色主体 = 总宽 - 2 * topRadius；开了自动排布时以实际挑中的那个为准）
+          当前页 \(model.carouselPage)/\(model.carouselPageCount)   配置排布 \(model.collapsedLayout)
+          各页实测宽 \(model.combinedWidths.sorted { $0.key < $1.key }.map { "\($0.key):\(String(format: "%.1f", $0.value))" }.joined(separator: " "))
+          各页预算宽 \((0..<model.carouselPageCount).map { "\($0):\(String(format: "%.1f", model.estimatedWidth(forPage: $0)))" }.joined(separator: " "))
+          靠左/正下方取用 \(String(format: "%.1f", model.combinedWidth))
 
         """.data(using: .utf8)!)
 
@@ -424,6 +434,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         config.carousel.toggle()
         writeConfig(["carousel": config.carousel])
         startCarousel()
+        // 关掉轮播后页数回到 1，立刻把行情页的宽度丢掉，否则黑条要等到
+        // 下一轮刷新才缩回去，中间那二十秒会一直保持着行情页撑出来的宽度
+        model.pruneWidths()
         window?.contentView?.menu = buildMenu()
     }
 
@@ -697,6 +710,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.model.collapsedLayout = cfg.collapsedLayout
                     self?.model.autoLayout = cfg.autoLayout
                     self?.model.redUp = cfg.redUp
+                    // 行情标的增减后页数会变，丢掉已经不存在的那些页宽
+                    self?.model.pruneWidths()
                 }
             }
         }
