@@ -22,6 +22,10 @@ cd "$OUT"
 shasum -a 256 "$APP_NAME-$VERSION.zip" > "$APP_NAME-$VERSION.zip.sha256"
 cd ..
 
+# 打包完就清掉构建产物，理由同 install.sh：留着会让 Spotlight 搜出
+# 两个同名 App，分不清哪个是装好在跑的那份
+rm -rf "build/$APP_NAME.app"
+
 SIZE=$(du -h "$OUT/$APP_NAME-$VERSION.zip" | cut -f1)
 echo
 echo "✅ $OUT/$APP_NAME-$VERSION.zip  ($SIZE)"
