@@ -56,6 +56,11 @@ final class ClaudeUsageProvider: Sendable {
                           primary: nil, secondary: nil, updatedAt: nil,
                           source: "statusline 快照", error: nil)
 
+        if Simulate.on("empty-quota") {
+            quota.error = "模拟：装了但取不到额度"
+            return quota
+        }
+
         let url = Self.snapshotURL
         guard let data = try? Data(contentsOf: url) else {
             quota.error = "等待 Claude Code 刷新状态栏"

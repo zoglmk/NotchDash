@@ -716,6 +716,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.model.redUp = cfg.redUp
                     // 行情标的增减后页数会变，丢掉已经不存在的那些页宽
                     self?.model.pruneWidths()
+                    // 数据到位后，当前页要是空的就立刻跳走，不必干等一个轮播间隔
+                    self?.model.skipEmptyPageIfNeeded()
                 }
             }
         }

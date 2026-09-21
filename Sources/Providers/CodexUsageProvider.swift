@@ -45,6 +45,11 @@ final class CodexUsageProvider: Sendable {
                           primary: nil, secondary: nil, updatedAt: nil,
                           source: "codex 会话日志", error: nil)
 
+        if Simulate.on("empty-quota") {
+            quota.error = "模拟：装了但取不到额度"
+            return quota
+        }
+
         guard FileManager.default.fileExists(atPath: sessionsRoot.path) else {
             quota.error = "未找到 ~/.codex/sessions"
             return quota

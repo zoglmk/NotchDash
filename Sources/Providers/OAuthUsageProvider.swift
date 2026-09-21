@@ -21,6 +21,7 @@ final class OAuthUsageProvider: @unchecked Sendable {
     // MARK: - Claude
 
     func fetchClaude() -> Quota? {
+        if Simulate.on("empty-quota") { return nil }
         guard shouldFetch(last: lastClaudeFetch) else { return lastClaudeResult }
         lastClaudeFetch = Date()
 
@@ -92,6 +93,7 @@ final class OAuthUsageProvider: @unchecked Sendable {
     // MARK: - Codex
 
     func fetchCodex() -> Quota? {
+        if Simulate.on("empty-quota") { return nil }
         // 刚换过账号：缓存里是上一个账号的额度，作废并立刻重新请求
         if AccountTracker.shared.consumeCodexSwitchFlag() {
             lastCodexResult = nil

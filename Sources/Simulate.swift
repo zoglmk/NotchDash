@@ -8,6 +8,10 @@ import Foundation
 ///
 ///     NOTCHDASH_SIMULATE=no-quota      假装本机没装 Claude Code 和 Codex
 ///     NOTCHDASH_SIMULATE=codex-logout  假装 Codex 已登出
+///     NOTCHDASH_SIMULATE=empty-quota   假装两个都装了，但一直取不到额度数据
+///                                      （例如装了 Claude Code 却既没配 statusline
+///                                      也没登录）。这种状态下额度页是空的，
+///                                      用来验证轮播会不会跳过空页
 ///
 /// 多个用逗号分隔。不设这个变量时一切照旧，所以不影响正常运行。
 enum Simulate {

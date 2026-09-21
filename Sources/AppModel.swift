@@ -186,6 +186,18 @@ final class AppModel: ObservableObject {
         return NSFont(descriptor: d, size: size) ?? base
     }
 
+    /// 当前页没内容就立刻跳走。
+    ///
+    /// nextCarouselPage 只在计时器翻页时才跑，而 carouselPage 初始就是 0。
+    /// 额度页要是一直没内容（装了 Claude Code 但既没配 statusline 也没登录），
+    /// 启动后得干等一个轮播间隔面板才会跳到行情，这期间是一块纯黑。
+    /// 所以数据一到位就检查一次。
+    func skipEmptyPageIfNeeded() {
+        guard carousel, items(forPage: carouselPage).isEmpty else { return }
+        let next = nextCarouselPage()
+        if next != carouselPage { carouselPage = next }
+    }
+
     /// 丢掉超出当前页数的实测宽度。
     ///
     /// 宽度改成取各页最大值之后，这一步是必须的：关掉轮播、或者删掉一个行情
