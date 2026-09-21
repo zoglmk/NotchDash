@@ -28,6 +28,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>$APP_NAME</string>
   <key>CFBundleIdentifier</key><string>app.notchdash.NotchDash</string>
   <key>CFBundleExecutable</key><string>$APP_NAME</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
@@ -38,6 +39,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+# 图标。必须在签名之前拷进去，否则签名不覆盖后加的文件
+cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 # 本地临时签名，避免每次运行被 Gatekeeper 拦
 codesign --force --deep --sign - "$APP" 2>/dev/null || echo "⚠️  签名跳过（不影响本地运行）"
